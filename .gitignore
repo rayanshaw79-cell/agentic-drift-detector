@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+venv/
+.env
+
+# Telemetry & runtime artifacts
+telemetry.jsonl
+
+# OS / Editor noise
+.DS_Store
+Thumbs.db
+.vscode/
