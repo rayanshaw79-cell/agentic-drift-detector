@@ -4,6 +4,7 @@ from schemas.incident_state import IncidentState
 from drift.drift_detector import analyze_workflow
 
 
+
 def main():
     initial_state: IncidentState = {
         "incident_id": str(uuid.uuid4())[:8],

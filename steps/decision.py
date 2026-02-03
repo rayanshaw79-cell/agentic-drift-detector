@@ -1,6 +1,9 @@
 import random
 from schemas.incident_state import IncidentState
 from telemetry.logger import log_step
+from config.simulation import SIMULATE_RETRY_DRIFT
+
+
 
 
 def decision_step(state: IncidentState) -> IncidentState:
@@ -9,7 +12,11 @@ def decision_step(state: IncidentState) -> IncidentState:
     state["path_taken"].append("decision")
 
     # Simulated confidence score
-    confidence = round(random.uniform(0.4, 0.95), 2)
+    if SIMULATE_RETRY_DRIFT:
+        confidence = round(random.uniform(0.3, 0.55), 2)
+    else:
+        confidence = round(random.uniform(0.4, 0.95), 2)
+
     state["confidence"] = confidence
 
     # Allow ONE retry if confidence is low
