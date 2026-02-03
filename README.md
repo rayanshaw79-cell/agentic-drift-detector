@@ -139,17 +139,58 @@ These patterns indicate **loss of autonomy quality**.
 
 ---
 
-## 🧪 Example Drift Scenario
+## 🧪 Drift Simulation & Alerting
 
-After a prompt update:
+This repository includes **intentional drift simulation** to demonstrate how autonomy can degrade *without failures* — and how the system detects it early.
 
-* Average steps increase from 4 → 7
-* Decision confidence drops
-* Escalation rate rises from 30% → 65%
+### 🔁 Scenario: Retry Explosion
 
-The system still "works" — but autonomy has degraded.
+In this simulation, the decision agent is configured to produce **low confidence scores**, causing:
 
-This project detects that change **before humans feel the pain**.
+* Repeated decision retries
+* Increased step count
+* Higher execution cost and latency
+
+Despite this degradation:
+
+* The workflow completes successfully
+* No exceptions are raised
+* The system remains "operational"
+
+This mirrors **real-world AI failures**, where systems don’t crash — they quietly get worse.
+
+### 🚨 Drift Detection Outcome
+
+The drift engine detects this behavioral change using:
+
+* Retry count deviation
+* Execution path inflation
+* Decision loop detection
+
+Example output:
+
+```
+🚨🚨 DRIFT ALERT 🚨🚨
+Risk Level: drift_detected
+Drift Score: 55
+Path Taken: ['triage', 'investigation', 'decision', 'decision', 'notification']
+Retries: 1
+```
+
+### 🧠 Why This Matters
+
+Most AI monitoring focuses on **outputs**.
+This system focuses on **behavior**.
+
+By detecting drift early, teams can:
+
+* Intervene before incidents escalate
+* Reduce operational cost
+* Maintain trust in autonomous systems
+
+This approach reflects how **production AI reliability teams** think about safety and observability.
+
+---
 
 ---
 
