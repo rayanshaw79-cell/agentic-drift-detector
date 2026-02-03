@@ -2,7 +2,7 @@ import uuid
 from workflows.incident_triage import incident_triage_workflow
 from schemas.incident_state import IncidentState
 from drift.drift_detector import analyze_workflow
-
+from alerts.alert_manager import trigger_alert
 
 
 def main():
@@ -34,6 +34,8 @@ def main():
 
     print("\n🚨 DRIFT ANALYSIS")
     print(analysis)
+
+    trigger_alert(analysis, final_state)
 
 
 if __name__ == "__main__":
