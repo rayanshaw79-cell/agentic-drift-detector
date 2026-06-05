@@ -1,2 +1,6 @@
 requests
+langchain
+langgraph
+langsmith
+langchain-openai
 python-dotenv

@@ -9,6 +9,7 @@ venv/
 
 # Telemetry & runtime artifacts
 telemetry.jsonl
+telemetry.db
 
 # OS / Editor noise
 .DS_Store

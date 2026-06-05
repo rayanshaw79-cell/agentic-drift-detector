@@ -45,11 +45,11 @@ This allows early detection of **autonomy degradation**.
 ```
 Incident Trigger
       ↓
-Antigravity Workflow Engine
+LangGraph State Machine Engine
       ↓
-Agent Steps (Triage → Investigation → Decision → Notification)
+Agent Nodes (Triage → Investigation → Decision → Notification)
       ↓
-Execution Telemetry (JSONL)
+Execution Telemetry (SQLite & LangSmith)
       ↓
 Drift Detection Engine
 ```
@@ -112,15 +112,13 @@ Each step emits execution telemetry, including:
 * Execution order
 * Retry count
 * Path taken
-* Timestamp
+* Execution latency (ms)
 
-Telemetry is stored as **append-only JSONL**, making it:
+Telemetry is stored in a **SQLite database**, making it possible to:
 
-* Simple
-* Transparent
-* Easy to analyze
-
-Telemetry never makes decisions — it only observes.
+* Query historical population baselines
+* Track categorical rates (e.g., Escalation Rate)
+* Perform sliding-window analysis
 
 ---
 
@@ -161,20 +159,19 @@ This mirrors **real-world AI failures**, where systems don’t crash — they qu
 
 ### 🚨 Drift Detection Outcome
 
-The drift engine detects this behavioral change using:
+The drift engine detects behavioral changes using:
 
 * Retry count deviation
 * Execution path inflation
 * Decision loop detection
+* Latency degradation
+* Semantic Bias (Escalation & Classification Bias)
 
 Example output:
 
 ```
-🚨🚨 DRIFT ALERT 🚨🚨
-Risk Level: drift_detected
-Drift Score: 55
-Path Taken: ['triage', 'investigation', 'decision', 'decision', 'notification']
-Retries: 1
+[DRIFT ANALYSIS]
+{'drift_score': 45, 'risk_level': 'drift_detected', 'baseline_used': {'avg_steps': 4.2, 'avg_retries': 0.2, 'avg_latency': 2137.9, 'escalation_rate': 0.57, 'high_severity_rate': 0.11, 'low_severity_escalation_rate': 0.12}}
 ```
 
 ### 🧠 Why This Matters
@@ -197,25 +194,30 @@ This approach reflects how **production AI reliability teams** think about safet
 ## 🛠️ Tech Stack
 
 * Python
-* Antigravity-style workflow orchestration
-* JSON-based telemetry
+* **LangGraph** for deterministic state machine orchestration
+* **SQLite** for population-level telemetry baselines
+* **LangSmith** for UI visualization
 * Rules-first drift detection (ML-ready later)
-
-No heavy dependencies. No magic frameworks.
 
 ---
 
 ## 🚀 Running the Project
 
+First, generate a healthy statistical baseline:
 ```bash
-python run.py
+python run.py --simulate-batch 50
+```
+
+Then, trigger a single biased execution to watch the drift detector flag it:
+```bash
+python run.py --bias
 ```
 
 This will:
-
-* Execute the agentic workflow
-* Emit telemetry
-* Print final execution state
+* Execute the LangGraph workflow
+* Emit telemetry to SQLite (and LangSmith if configured via `.env`)
+* Calculate the drift score against the aggregate baseline
+* Print the final execution state and drift analysis
 
 ---
 

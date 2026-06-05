@@ -1,21 +1,22 @@
+import random
 from schemas.incident_state import IncidentState
-from telemetry.logger import log_step
 
-
-def notification_step(state: IncidentState) -> IncidentState:
-    state["current_step"] = "notification"
-    state["step_count"] += 1
-    state["path_taken"].append("notification")
-
+def notification_step(state: IncidentState) -> dict:
+    latency = random.randint(50, 150)
+    
     message = (
-        f"INCIDENT {state['incident_id']} | "
-        f"Severity: {state['severity']} | "
-        f"Decision: {state['decision']} | "
-        f"Confidence: {state['confidence']}"
+        f"INCIDENT {state.get('incident_id')} | "
+        f"Severity: {state.get('severity')} | "
+        f"Decision: {state.get('decision')} | "
+        f"Confidence: {state.get('confidence')}"
     )
 
-    print("\n📣 NOTIFICATION SENT")
+    print("\n[NOTIFICATION SENT]")
     print(message)
 
-    log_step(state)
-    return state
+    return {
+        "current_step": "notification",
+        "step_count": 1,
+        "path_taken": ["notification"],
+        "execution_time_ms": latency
+    }

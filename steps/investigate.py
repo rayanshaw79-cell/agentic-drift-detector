@@ -1,18 +1,19 @@
+import random
 from schemas.incident_state import IncidentState
-from telemetry.logger import log_step
 
-
-def investigation_step(state: IncidentState) -> IncidentState:
-    state["current_step"] = "investigation"
-    state["step_count"] += 1
-    state["path_taken"].append("investigation")
-
+def investigation_step(state: IncidentState) -> dict:
     severity = state.get("severity", "unknown")
+    latency = random.randint(300, 800)
 
-    state["investigation_summary"] = (
+    summary = (
         f"Reviewed logs and metrics for {severity} severity incident. "
         "Detected elevated response times."
     )
 
-    log_step(state)
-    return state
+    return {
+        "current_step": "investigation",
+        "step_count": 1,
+        "path_taken": ["investigation"],
+        "investigation_summary": summary,
+        "execution_time_ms": latency
+    }

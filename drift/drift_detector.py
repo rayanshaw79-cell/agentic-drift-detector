@@ -1,27 +1,12 @@
+from telemetry.store import get_historical_metrics
 
 # -------------------------
-# 1. BASELINE DEFINITION
+# 1. DRIFT SIGNAL FUNCTIONS
 # -------------------------
 
-BASELINE = {
-    "max_steps": 5,
-    "max_retries": 1,
-    "expected_path": [
-        "triage",
-        "investigation",
-        "decision",
-        "notification"
-    ],
-    "max_decision_repeats": 2
-}
-
-# -------------------------
-# 2. DRIFT SIGNAL FUNCTIONS
-# -------------------------
-
-def step_count_drift(state):
-    max_steps = BASELINE["max_steps"]
-    actual_steps = state["step_count"]
+def step_count_drift(state, baseline):
+    max_steps = max(5, baseline["avg_steps"] + 1)
+    actual_steps = state.get("step_count", 0)
 
     if actual_steps <= max_steps:
         return 0
@@ -30,9 +15,10 @@ def step_count_drift(state):
     return min(30, overflow * 10)
 
 
-def retry_drift(state):
-    max_retries = BASELINE["max_retries"]
-    retries = state["retry_count"]
+def retry_drift(state, baseline):
+    # We dynamically allow retries up to the baseline average + a buffer
+    max_retries = max(1, baseline["avg_retries"])
+    retries = state.get("retry_count", 0)
 
     if retries <= max_retries:
         return 0
@@ -41,8 +27,8 @@ def retry_drift(state):
 
 
 def path_drift(state):
-    expected = BASELINE["expected_path"]
-    actual = state["path_taken"]
+    expected = ["triage", "investigation", "decision"]
+    actual = state.get("path_taken", [])
 
     if actual[:len(expected)] != expected:
         return 25
@@ -51,30 +37,82 @@ def path_drift(state):
 
 
 def decision_loop_drift(state):
-    decision_count = state["path_taken"].count("decision")
-    allowed = BASELINE["max_decision_repeats"]
+    decision_count = state.get("path_taken", []).count("decision")
+    allowed = 2
 
     if decision_count <= allowed:
         return 0
 
     return min(20, (decision_count - allowed) * 10)
 
+
+def latency_drift(state, baseline):
+    # E.g. anything over 1.5x baseline latency is considered drift
+    expected_latency = max(500, baseline["avg_latency"] * 1.5)
+    actual = state.get("execution_time_ms", 0)
+
+    if actual <= expected_latency:
+        return 0
+
+    overflow = (actual - expected_latency) / 1000.0  # seconds over
+    return min(20, int(overflow * 5))
+
+def escalation_bias(state, baseline):
+    decision = state.get("decision")
+    severity = state.get("severity")
+    
+    if decision != "escalate" or severity != "low":
+        return 0
+        
+    # If the historical low_severity_escalation_rate is small (e.g. 5%),
+    # but the agent escalated this low-severity issue, we flag it.
+    historical_rate = baseline.get("low_severity_escalation_rate", 0.05)
+    
+    if historical_rate < 0.2:
+        # Strong deviation from baseline: agent is panicking
+        return 25
+    elif historical_rate < 0.5:
+        return 10
+    
+    return 0
+
+def classification_bias(state, baseline):
+    severity = state.get("severity")
+    
+    if severity != "high":
+        return 0
+        
+    # If the historical high_severity_rate is low, but the agent assigned high severity
+    historical_rate = baseline.get("high_severity_rate", 0.2)
+    
+    if historical_rate < 0.15:
+        # Anomalous high severity classification
+        return 20
+    elif historical_rate < 0.3:
+        return 10
+        
+    return 0
+
+
 # -------------------------
-# 3. DRIFT SCORE AGGREGATOR
+# 2. DRIFT SCORE AGGREGATOR
 # -------------------------
 
-def calculate_drift_score(state):
+def calculate_drift_score(state, baseline):
     score = 0
 
-    score += step_count_drift(state)
-    score += retry_drift(state)
+    score += step_count_drift(state, baseline)
+    score += retry_drift(state, baseline)
     score += path_drift(state)
     score += decision_loop_drift(state)
+    score += latency_drift(state, baseline)
+    score += escalation_bias(state, baseline)
+    score += classification_bias(state, baseline)
 
     return score
 
 # -------------------------
-# 4. RISK CLASSIFICATION
+# 3. RISK CLASSIFICATION
 # -------------------------
 
 def classify_risk(score):
@@ -86,16 +124,16 @@ def classify_risk(score):
         return "high_risk"
 
 # -------------------------
-# 5. PUBLIC ENTRY POINT
+# 4. PUBLIC ENTRY POINT
 # -------------------------
 
 def analyze_workflow(state):
-    score = calculate_drift_score(state)
+    baseline = get_historical_metrics()
+    score = calculate_drift_score(state, baseline)
     risk = classify_risk(score)
 
     return {
         "drift_score": score,
-        "risk_level": risk
+        "risk_level": risk,
+        "baseline_used": baseline
     }
-
-

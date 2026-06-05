@@ -1,5 +1,5 @@
-from typing import TypedDict, Optional, List
-
+import operator
+from typing import TypedDict, Optional, List, Annotated
 
 class IncidentState(TypedDict):
     # --- Identity ---
@@ -14,9 +14,9 @@ class IncidentState(TypedDict):
 
     # --- Execution metadata ---
     current_step: str
-    step_count: int
-    retry_count: int
-    path_taken: List[str]
+    step_count: Annotated[int, operator.add]
+    retry_count: Annotated[int, operator.add]
+    path_taken: Annotated[List[str], operator.add]
 
     # --- Performance ---
-    execution_time_ms: int
+    execution_time_ms: Annotated[int, operator.add]

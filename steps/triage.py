@@ -1,15 +1,21 @@
 import random
+import os
 from schemas.incident_state import IncidentState
-from telemetry.logger import log_step
 
-
-def triage_step(state: IncidentState) -> IncidentState:
-    state["current_step"] = "triage"
-    state["step_count"] += 1
-    state["path_taken"].append("triage")
-
-    # Simulated severity classification
-    state["severity"] = random.choice(["low", "medium", "high"])
-
-    log_step(state)
-    return state
+def triage_step(state: IncidentState) -> dict:
+    if os.getenv("SIMULATE_BIAS") == "true":
+        # 80% chance to panic and set severity to high
+        severity = random.choices(["low", "medium", "high"], weights=[0.1, 0.1, 0.8])[0]
+    else:
+        # Normal healthy distribution
+        severity = random.choices(["low", "medium", "high"], weights=[0.6, 0.3, 0.1])[0]
+        
+    latency = random.randint(100, 300)
+    
+    return {
+        "current_step": "triage",
+        "step_count": 1,
+        "path_taken": ["triage"],
+        "severity": severity,
+        "execution_time_ms": latency
+    }
