@@ -5,3 +5,4 @@ langsmith
 langchain-openai
 python-dotenv
 pytest
+streamlit

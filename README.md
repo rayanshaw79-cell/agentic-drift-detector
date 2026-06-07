@@ -1,6 +1,6 @@
 # Agentic Drift Detector
 
-Detect **behavioral drift** in autonomous, agentic AI workflows by analyzing execution telemetry — even when the system does not explicitly fail.
+Detect **behavioral drift and semantic bias** in autonomous, agentic AI workflows by analyzing execution telemetry — even when the system does not explicitly fail.
 
 ---
 
@@ -11,17 +11,20 @@ Instead, they **silently drift**:
 
 * More steps than before
 * Excessive retries
-* Tool overuse
 * Escalation bias
+* Classification bias
 * Rising latency and cost
 
-These issues don’t throw errors — they **erode reliability over time**.
+These issues don't throw errors — they **erode reliability over time**.
 
-**Agentic Drift Detector** is a reference implementation that shows how to:
+**Agentic Drift Detector** is a production-grade reference implementation that shows how to:
 
-* Instrument agentic workflows
-* Capture execution behavior
-* Detect drift before it becomes an incident
+* Orchestrate agentic workflows using **LangGraph**
+* Instrument and persist execution behavior in **SQLite**
+* Detect semantic drift using population-level baselines
+* **Heal** the agent automatically when a drift loop is detected
+* Visualize everything in a live **Streamlit dashboard**
+* Alert teams via **Slack and Discord webhooks**
 
 ---
 
@@ -35,8 +38,9 @@ Instead of validating outputs, this project monitors:
 * Retry patterns
 * Step ordering
 * Decision instability
+* Semantic bias (escalation & classification)
 
-This allows early detection of **autonomy degradation**.
+This allows early detection of **autonomy degradation** — and automatic correction.
 
 ---
 
@@ -47,195 +51,179 @@ Incident Trigger
       ↓
 LangGraph State Machine Engine
       ↓
-Agent Nodes (Triage → Investigation → Decision → Notification)
+LLM-Powered Agent Nodes (Triage → Investigation → Decision → Notification)
+      ↓                             ↑
+      └──── Drift Loop? ────→ Intervention (Agentic Healing)
       ↓
-Execution Telemetry (SQLite & LangSmith)
+Execution Telemetry (SQLite)
       ↓
 Drift Detection Engine
+      ↓
+Webhook Alerting (Slack / Discord) + Streamlit Dashboard
 ```
 
-Each layer has a **single responsibility**, making the system observable and extensible.
+Each layer has a **single responsibility**, making the system observable, extensible, and self-healing.
 
 ---
 
 ## 🤖 Agentic Workflow
 
-The incident triage workflow consists of four autonomous steps:
+The incident triage workflow consists of autonomous nodes managed by LangGraph:
 
-1. **Triage Step**
+1. **Triage Node**
+   * Uses **ChatOpenAI (gpt-3.5-turbo)** to classify incident severity
+   * Falls back to weighted simulation if no API key is configured
 
-   * Classifies incident severity
-   * Introduces classification drift signals
+2. **Investigation Node**
+   * Gathers contextual evidence from the incident state
 
-2. **Investigation Step**
+3. **Decision Node**
+   * Uses **ChatOpenAI** to decide: `escalate` or `auto_resolve`
+   * Returns a confidence score between 0.0 and 1.0
 
-   * Gathers contextual evidence
-   * Enables depth and repetition drift detection
+4. **Intervention Node** *(Agentic Healing)*
+   * Triggered automatically if retry_count ≥ 2 (persistent drift loop detected)
+   * Forces the agent back to a stable, deterministic decision
+   * Prevents infinite loops without crashing the workflow
 
-3. **Decision Step**
-
-   * Determines auto-resolution vs escalation
-   * Allows a single controlled retry
-   * Primary source of behavioral drift
-
-4. **Notification Step**
-
+5. **Notification Node**
    * Communicates outcomes
-   * Detects duplicate or premature alerts
-
-The workflow supports **branching and retry**, which are critical for realistic drift scenarios.
-
----
-
-## 🧾 Shared State Contract
-
-All agents operate on a shared `IncidentState` contract:
-
-* Incident identity
-* Agent outputs
-* Execution metadata
-* Performance indicators
-
-This contract is the **single source of truth** for:
-
-* Telemetry
-* Drift analysis
-* Replay and debugging
+   * Triggers webhook alerts on drift events
 
 ---
 
 ## 📡 Telemetry & Observability
 
-Each step emits execution telemetry, including:
+Each execution emits telemetry including:
 
-* Step name
-* Execution order
-* Retry count
-* Path taken
+* Step name, execution order, retry count, path taken
 * Execution latency (ms)
+* Drift score and risk level
 
-Telemetry is stored in a **SQLite database**, making it possible to:
+Telemetry is stored in a **SQLite database** enabling:
 
-* Query historical population baselines
-* Track categorical rates (e.g., Escalation Rate)
-* Perform sliding-window analysis
+* Population-level baseline calculations
+* Categorical rate tracking (Escalation Rate, High-Severity Rate)
+* Live visualization in the Streamlit dashboard
 
 ---
 
-## 🚨 What Is Drift?
+## 🚨 Drift & Bias Detection
 
 Drift is defined as **deviation from historically stable behavior**, not explicit failure.
 
-Examples:
+The drift engine detects:
 
-* Decision retries increase over time
-* Escalation rate spikes for low-severity incidents
-* Execution paths become longer
-* Notifications fire before decisions stabilize
-
-These patterns indicate **loss of autonomy quality**.
-
----
-
-## 🧪 Drift Simulation & Alerting
-
-This repository includes **intentional drift simulation** to demonstrate how autonomy can degrade *without failures* — and how the system detects it early.
-
-### 🔁 Scenario: Retry Explosion
-
-In this simulation, the decision agent is configured to produce **low confidence scores**, causing:
-
-* Repeated decision retries
-* Increased step count
-* Higher execution cost and latency
-
-Despite this degradation:
-
-* The workflow completes successfully
-* No exceptions are raised
-* The system remains "operational"
-
-This mirrors **real-world AI failures**, where systems don’t crash — they quietly get worse.
-
-### 🚨 Drift Detection Outcome
-
-The drift engine detects behavioral changes using:
-
-* Retry count deviation
-* Execution path inflation
-* Decision loop detection
-* Latency degradation
-* Semantic Bias (Escalation & Classification Bias)
-
-Example output:
-
-```
-[DRIFT ANALYSIS]
-{'drift_score': 45, 'risk_level': 'drift_detected', 'baseline_used': {'avg_steps': 4.2, 'avg_retries': 0.2, 'avg_latency': 2137.9, 'escalation_rate': 0.57, 'high_severity_rate': 0.11, 'low_severity_escalation_rate': 0.12}}
-```
-
-### 🧠 Why This Matters
-
-Most AI monitoring focuses on **outputs**.
-This system focuses on **behavior**.
-
-By detecting drift early, teams can:
-
-* Intervene before incidents escalate
-* Reduce operational cost
-* Maintain trust in autonomous systems
-
-This approach reflects how **production AI reliability teams** think about safety and observability.
+| Signal | Trigger |
+|---|---|
+| **Retry Drift** | Retry count exceeds historical average |
+| **Step Count Drift** | More steps than the historical norm |
+| **Latency Drift** | Execution time > 1.5× the historical average |
+| **Escalation Bias** | Agent escalates a low-severity incident against historical norms |
+| **Classification Bias** | Agent over-classifies incidents as high-severity |
 
 ---
+
+## 🩹 Agentic Healing
+
+When the system detects a **persistent retry loop** (retry_count ≥ 2 with low confidence), the LangGraph conditional edge routes to the `intervention` node which:
+
+1. Logs the healing event
+2. Forcibly resets confidence to a stable value
+3. Sets the decision to `escalate` (safest action under uncertainty)
+4. Passes control cleanly to the notification node
+
+This transforms the detector from **passive observer** to **active guardian**.
 
 ---
 
 ## 🛠️ Tech Stack
 
-* Python
-* **LangGraph** for deterministic state machine orchestration
-* **SQLite** for population-level telemetry baselines
-* **LangSmith** for UI visualization
-* Rules-first drift detection (ML-ready later)
+* **Python** — core language
+* **LangGraph** — deterministic state machine orchestration
+* **LangChain + OpenAI** — real LLM-powered triage and decision nodes (optional, with simulation fallback)
+* **SQLite** — population-level telemetry persistence
+* **Streamlit** — live telemetry visualization dashboard
+* **Slack / Discord Webhooks** — real-time drift alerts
+* **pytest** — automated test suite (8 tests)
 
 ---
 
 ## 🚀 Running the Project
 
-First, generate a healthy statistical baseline:
+### 1. Install dependencies
 ```bash
-python run.py --simulate-batch 50
+pip install -r requirements.txt
 ```
 
-Then, trigger a single biased execution to watch the drift detector flag it:
+### 2. Configure environment (optional)
+Create a `.env` file:
+```env
+# Optional — enables real LLM reasoning
+OPENAI_API_KEY=sk-...
+
+# Optional — enables real-time Slack alerts
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+
+# Optional — enables real-time Discord alerts
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+```
+
+> If no API key is provided, the workflow runs in **simulation mode** automatically.
+
+### 3. Build a healthy baseline
 ```bash
+python run.py --simulate-batch 60
+```
+
+### 4. Run a single execution (or trigger biased simulation)
+```bash
+# Normal run
+python run.py
+
+# Trigger classification + escalation bias
 python run.py --bias
 ```
 
-This will:
-* Execute the LangGraph workflow
-* Emit telemetry to SQLite (and LangSmith if configured via `.env`)
-* Calculate the drift score against the aggregate baseline
-* Print the final execution state and drift analysis
+### 5. Launch the Streamlit dashboard
+```bash
+streamlit run dashboard.py
+```
+
+### 6. Run the test suite
+```bash
+python -m pytest
+```
+
+---
+
+## 🧪 Test Suite
+
+| Test | Description |
+|---|---|
+| `test_escalation_bias_anomalous` | Verifies +25 penalty for anomalous low-severity escalation |
+| `test_escalation_bias_normal` | Verifies zero penalty for healthy auto-resolution |
+| `test_classification_bias_anomalous` | Verifies +20 penalty for anomalous high-severity classification |
+| `test_latency_drift_high` | Verifies max latency penalty for severe degradation |
+| `test_step_count_drift` | Verifies step count penalty calculation |
+| `test_workflow_healthy_auto_resolve` | Integration: healthy path → auto_resolve |
+| `test_workflow_low_confidence_single_retry` | Integration: one retry, no intervention |
+| `test_workflow_intervention_on_drift_loop` | Integration: drift loop triggers healing node |
 
 ---
 
 ## 🔮 Roadmap
 
-Planned enhancements:
-
-* Drift scoring & risk classification
-* Slack / alert integrations
-* Baseline learning
-* Visualization dashboard
-* Multi-workflow support
+* Multi-incident workflow support
+* LangSmith trace integration
+* ML-based anomaly detection (replacing rule-based signals)
+* Cloud deployment (Cloud Run)
 
 ---
 
 ## 👤 Author
 
-Built as a systems-level exploration of **agentic AI reliability, observability, and autonomy drift**.
+Built as a systems-level exploration of **agentic AI reliability, observability, autonomy drift, and self-healing**.
 
 This project emphasizes **engineering judgment over demos**.
 

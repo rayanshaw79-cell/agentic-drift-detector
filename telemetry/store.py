@@ -19,20 +19,33 @@ def init_db():
             retry_count INTEGER,
             path_taken TEXT,
             execution_time_ms INTEGER,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            drift_score INTEGER DEFAULT 0,
+            risk_level TEXT DEFAULT 'healthy',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # Migrate existing tables that lack the new columns (safe to run repeatedly)
+    for col, definition in [
+        ("drift_score", "INTEGER DEFAULT 0"),
+        ("risk_level",  "TEXT DEFAULT 'healthy'"),
+        ("created_at",  "DATETIME DEFAULT CURRENT_TIMESTAMP"),
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE executions ADD COLUMN {col} {definition}")
+        except Exception:
+            pass  # Column already exists
     conn.commit()
     conn.close()
 
-def save_execution_state(state: IncidentState):
+def save_execution_state(state: IncidentState, analysis: dict = None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO executions (
-            incident_id, severity, decision, confidence, 
-            step_count, retry_count, path_taken, execution_time_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            incident_id, severity, decision, confidence,
+            step_count, retry_count, path_taken, execution_time_ms,
+            drift_score, risk_level
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         state.get("incident_id"),
         state.get("severity"),
@@ -41,7 +54,9 @@ def save_execution_state(state: IncidentState):
         state.get("step_count", 0),
         state.get("retry_count", 0),
         json.dumps(state.get("path_taken", [])),
-        state.get("execution_time_ms", 0)
+        state.get("execution_time_ms", 0),
+        analysis.get("drift_score", 0) if analysis else 0,
+        analysis.get("risk_level", "healthy") if analysis else "healthy",
     ))
     conn.commit()
     conn.close()
@@ -73,7 +88,7 @@ def get_historical_metrics(limit=100):
     
     if not row or row["avg_steps"] is None:
         return {
-            "avg_steps": 4.0,  # Fallback defaults
+            "avg_steps": 4.0,
             "avg_retries": 0.0,
             "avg_latency": 100.0,
             "escalation_rate": 0.2,

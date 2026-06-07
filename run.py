@@ -50,7 +50,10 @@ def main():
     for i in range(simulate_count):
         initial_state = create_initial_state()
         final_state = incident_triage_workflow(initial_state)
-        save_execution_state(final_state)
+
+        # Always compute drift analysis so we can persist it
+        analysis = analyze_workflow(final_state)
+        save_execution_state(final_state, analysis)
         
         if simulate_count > 1:
             print(f"Completed simulation {i+1}/{simulate_count}")
@@ -58,9 +61,6 @@ def main():
     if simulate_count == 1:
         print("\n[FINAL WORKFLOW STATE]")
         print(final_state)
-
-        # Analyze drift against dynamic baseline
-        analysis = analyze_workflow(final_state)
 
         print("\n[DRIFT ANALYSIS]")
         print(analysis)
