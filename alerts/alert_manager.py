@@ -1,8 +1,12 @@
+import logging
 import os
+
 import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+log = logging.getLogger(__name__)
 
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
@@ -66,18 +70,19 @@ def _build_discord_payload(analysis: dict, state: dict) -> dict:
     }
 
 
-def trigger_alert(analysis: dict, state: dict):
+def trigger_alert(analysis: dict, state: dict) -> None:
     if analysis["risk_level"] == "healthy":
         return
 
-    # Always print to console
-    print(f"\n[DRIFT ALERT] Risk Level: {analysis['risk_level']} | Score: {analysis['drift_score']}")
-    print(f"  Incident: {state['incident_id']} | Decision: {state.get('decision')} | Retries: {state.get('retry_count', 0)}")
-    print(f"  Path: {'  ->  '.join(state.get('path_taken', []))}")
+    log.warning(
+        "DRIFT ALERT — risk=%s score=%d incident=%s decision=%s retries=%d",
+        analysis['risk_level'], analysis['drift_score'],
+        state['incident_id'], state.get('decision'), state.get('retry_count', 0),
+    )
+    log.info("Path taken: %s", ' -> '.join(state.get('path_taken', [])))
 
-    # Intervention note
     if "intervention" in state.get("path_taken", []):
-        print("  [HEALING] Agentic healing was triggered during this run.")
+        log.info("[HEALING] Agentic healing was triggered during this run.")
 
     # Send to Slack
     if SLACK_WEBHOOK_URL:
@@ -85,13 +90,13 @@ def trigger_alert(analysis: dict, state: dict):
             payload = _build_slack_payload(analysis, state)
             response = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=5)
             if response.status_code == 200:
-                print("  [SLACK] Alert sent successfully.")
+                log.info("[SLACK] Alert sent successfully.")
             else:
-                print(f"  [SLACK] Alert failed: {response.status_code} {response.text}")
+                log.error("[SLACK] Alert failed: %d %s", response.status_code, response.text)
         except Exception as e:
-            print(f"  [SLACK] Alert error: {e}")
+            log.error("[SLACK] Alert error: %s", e)
     else:
-        print("  [SLACK] No SLACK_WEBHOOK_URL configured — skipping.")
+        log.debug("[SLACK] No SLACK_WEBHOOK_URL configured — skipping.")
 
     # Send to Discord
     if DISCORD_WEBHOOK_URL:
@@ -99,10 +104,10 @@ def trigger_alert(analysis: dict, state: dict):
             payload = _build_discord_payload(analysis, state)
             response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5)
             if response.status_code in (200, 204):
-                print("  [DISCORD] Alert sent successfully.")
+                log.info("[DISCORD] Alert sent successfully.")
             else:
-                print(f"  [DISCORD] Alert failed: {response.status_code} {response.text}")
+                log.error("[DISCORD] Alert failed: %d %s", response.status_code, response.text)
         except Exception as e:
-            print(f"  [DISCORD] Alert error: {e}")
+            log.error("[DISCORD] Alert error: %s", e)
     else:
-        print("  [DISCORD] No DISCORD_WEBHOOK_URL configured — skipping.")
+        log.debug("[DISCORD] No DISCORD_WEBHOOK_URL configured — skipping.")

@@ -61,3 +61,64 @@ def test_step_count_drift(healthy_baseline):
     
     score = step_count_drift(state, healthy_baseline)
     assert score == 20
+
+
+def test_retry_drift_normal(healthy_baseline):
+    """No penalty when retries are within baseline tolerance."""
+    state = {"retry_count": 0}
+    assert retry_drift(state, healthy_baseline) == 0
+
+
+def test_retry_drift_anomalous(healthy_baseline):
+    """Penalty applied when retries significantly exceed baseline."""
+    # Baseline avg_retries=0 → max_retries=1; actual=3 → overflow=2 → min(25, 30)=25
+    state = {"retry_count": 3}
+    score = retry_drift(state, healthy_baseline)
+    assert score == 25, f"Expected 25, got {score}"
+
+
+# ─── Empty-DB baseline tests ─────────────────────────────────────────────────
+
+def test_empty_db_returns_default_baseline():
+    """
+    get_historical_metrics() must return safe defaults when the database is
+    empty — it must not crash or return None values.
+    The temp_db fixture (conftest.py) ensures we start with a fresh, empty DB.
+    """
+    from telemetry.store import get_historical_metrics
+
+    baseline = get_historical_metrics()
+
+    assert isinstance(baseline, dict), "Baseline must be a dict"
+    assert baseline["avg_steps"] == 4.0
+    assert baseline["avg_retries"] == 0.0
+    assert baseline["avg_latency"] == 100.0
+    assert 0 <= baseline["escalation_rate"] <= 1
+    assert 0 <= baseline["high_severity_rate"] <= 1
+    assert 0 <= baseline["low_severity_escalation_rate"] <= 1
+
+
+def test_empty_db_drift_scoring_does_not_crash():
+    """
+    analyze_workflow() should complete without error even with an empty
+    telemetry database (falls back to default baseline).
+    """
+    from drift.drift_detector import analyze_workflow
+
+    state = {
+        "incident_id": "test-empty",
+        "severity": "medium",
+        "decision": "auto_resolve",
+        "confidence": 0.85,
+        "step_count": 4,
+        "retry_count": 0,
+        "path_taken": ["triage", "investigation", "decision", "notification"],
+        "execution_time_ms": 300,
+    }
+
+    result = analyze_workflow(state)
+
+    assert "drift_score" in result
+    assert "risk_level" in result
+    assert result["risk_level"] in ("healthy", "drift_detected", "high_risk")
+    assert isinstance(result["drift_score"], int)

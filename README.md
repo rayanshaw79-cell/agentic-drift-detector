@@ -1,8 +1,15 @@
 # Agentic Drift Detector
 
+![Python](https://img.shields.io/badge/python-3.11-blue?logo=python&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-0.1-purple?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PC9zdmc+)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.35-FF4B4B?logo=streamlit&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-10%20passing-brightgreen?logo=pytest&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-active-success)
+
 Detect **behavioral drift and semantic bias** in autonomous, agentic AI workflows by analyzing execution telemetry — even when the system does not explicitly fail.
 
----
+
 
 ## 🧠 Why This Project Exists
 
@@ -178,11 +185,17 @@ python run.py --simulate-batch 60
 
 ### 4. Run a single execution (or trigger biased simulation)
 ```bash
-# Normal run
+# Normal run (rich terminal output)
 python run.py
 
 # Trigger classification + escalation bias
 python run.py --bias
+
+# Suppress webhook alerts (useful in CI)
+python run.py --no-alerts
+
+# Wipe the telemetry database and start fresh
+python run.py --clear
 ```
 
 ### 5. Launch the Streamlit dashboard
@@ -192,8 +205,14 @@ streamlit run dashboard.py
 
 ### 6. Run the test suite
 ```bash
-python -m pytest
+# Full suite with coverage report
+pytest
+
+# Quick run (no coverage)
+pytest --no-cov
 ```
+
+
 
 ---
 
