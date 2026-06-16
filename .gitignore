@@ -11,6 +11,9 @@ venv/
 telemetry.jsonl
 telemetry.db
 
+# Docker volumes
+postgres-data/
+
 # OS / Editor noise
 .DS_Store
 Thumbs.db

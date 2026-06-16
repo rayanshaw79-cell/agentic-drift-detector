@@ -1,0 +1,80 @@
+version: "3.9"
+
+# ── Agentic Drift Detector — Local SaaS Stack ─────────────────────────────────
+#
+# Services:
+#   postgres  — TimescaleDB (PostgreSQL 15 + time-series extension)
+#   redis     — Redis 7 (async telemetry queue)
+#   worker    — Background queue drain worker
+#
+# Quick start:
+#   docker compose up -d
+#   python run.py --simulate-batch 60
+#   streamlit run dashboard.py
+#
+# Environment:
+#   Copy .env.example to .env and adjust TENANT_ID, OPENAI_API_KEY, etc.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── PostgreSQL + TimescaleDB ────────────────────────────────────────────────
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: drift-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     drift
+      POSTGRES_PASSWORD: drift
+      POSTGRES_DB:       drift
+    ports:
+      - "5432:5432"
+    volumes:
+      # Persist data across restarts
+      - postgres-data:/var/lib/postgresql/data
+      # Auto-run migration on first start
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:     ["CMD-SHELL", "pg_isready -U drift -d drift"]
+      interval: 5s
+      timeout:  5s
+      retries:  10
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: drift-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test:     ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout:  3s
+      retries:  5
+
+  # ── Background Telemetry Worker ─────────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: drift-worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://drift:drift@postgres:5432/drift
+      REDIS_URL:    redis://redis:6379/0
+      TENANT_ID:    ${TENANT_ID:-default}
+      # Forward optional keys from host .env
+      OPENAI_API_KEY:       ${OPENAI_API_KEY:-}
+      SLACK_WEBHOOK_URL:    ${SLACK_WEBHOOK_URL:-}
+      DISCORD_WEBHOOK_URL:  ${DISCORD_WEBHOOK_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Worker logs at INFO level; override with LOG_LEVEL env if needed
+
+volumes:
+  postgres-data:
+    driver: local

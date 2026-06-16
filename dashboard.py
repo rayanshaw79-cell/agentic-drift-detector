@@ -1,13 +1,14 @@
+import json
+import os
 import sqlite3
 import time
-import os
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-# ─── Page Config ────────────────────────────────────────────────────────────
+# ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Agentic Drift Detector",
     page_icon="🧠",
@@ -15,151 +16,168 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─── Design System ───────────────────────────────────────────────────────────
-COLORS = {
-    "bg":          "#0d1117",
-    "surface":     "#161b22",
-    "surface2":    "#1c2230",
-    "border":      "#2d3348",
-    "text":        "#e6edf3",
-    "muted":       "#8b949e",
-    "blue":        "#58a6ff",
-    "green":       "#3fb950",
-    "yellow":      "#d29922",
-    "red":         "#f85149",
-    "purple":      "#bc8cff",
-}
+# ── Backend Detection ─────────────────────────────────────────────────────────
+from dotenv import load_dotenv
+load_dotenv()
+USE_POSTGRES = bool(os.getenv("DATABASE_URL"))
+DB_PATH = os.path.join(os.path.dirname(__file__), "telemetry.db")
 
+# ── Design System ─────────────────────────────────────────────────────────────
+COLORS = {
+    "bg":      "#0d1117", "surface": "#161b22", "surface2": "#1c2230",
+    "border":  "#2d3348", "text":    "#e6edf3",  "muted":   "#8b949e",
+    "blue":    "#58a6ff", "green":   "#3fb950",  "yellow":  "#d29922",
+    "red":     "#f85149", "purple":  "#bc8cff",
+}
 PLOTLY_LAYOUT = dict(
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     font=dict(family="Inter, sans-serif", color=COLORS["muted"], size=12),
     margin=dict(l=0, r=0, t=24, b=0),
     xaxis=dict(showgrid=False, zeroline=False, color=COLORS["muted"]),
     yaxis=dict(showgrid=True, gridcolor=COLORS["border"], zeroline=False, color=COLORS["muted"]),
     legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color=COLORS["muted"])),
-    hoverlabel=dict(bgcolor=COLORS["surface2"], bordercolor=COLORS["border"], font_color=COLORS["text"]),
+    hoverlabel=dict(bgcolor=COLORS["surface2"], bordercolor=COLORS["border"],
+                    font_color=COLORS["text"]),
 )
 
-# ─── Custom CSS ──────────────────────────────────────────────────────────────
+# ── Custom CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     .main { background-color: #0d1117; }
+    div[data-testid="stSidebar"] { background: #0d1117; border-right: 1px solid #2d3348; }
 
-    /* ── Sidebar ── */
-    div[data-testid="stSidebar"] {
-        background: #0d1117;
-        border-right: 1px solid #2d3348;
-    }
-
-    /* ── Metric Cards ── */
     .metric-card {
         background: linear-gradient(135deg, #161b22 0%, #1c2230 100%);
-        border: 1px solid #2d3348;
-        border-radius: 14px;
-        padding: 22px 20px 18px;
-        text-align: center;
-        transition: border-color 0.2s;
+        border: 1px solid #2d3348; border-radius: 14px;
+        padding: 22px 20px 18px; text-align: center; transition: border-color 0.2s;
     }
     .metric-card:hover { border-color: #58a6ff44; }
-    .metric-label {
-        color: #8b949e; font-size: 11px; font-weight: 600;
-        letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;
-    }
+    .metric-label { color: #8b949e; font-size: 11px; font-weight: 600;
+        letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
     .metric-value { color: #e6edf3; font-size: 30px; font-weight: 700; line-height: 1; }
     .metric-sub   { color: #58a6ff; font-size: 12px; margin-top: 6px; }
 
-    /* ── Risk Colors ── */
-    .risk-healthy       { color: #3fb950; }
-    .risk-drift         { color: #d29922; }
-    .risk-high          { color: #f85149; }
+    .risk-healthy { color: #3fb950; }
+    .risk-drift   { color: #d29922; }
+    .risk-high    { color: #f85149; }
 
-    /* ── Badges ── */
-    .badge {
-        display: inline-block; padding: 3px 10px;
-        border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
-    }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px;
+             font-size: 11px; font-weight: 600; letter-spacing: 0.03em; }
     .badge-healthy { background: rgba(63,185,80,0.12);  color: #3fb950; border: 1px solid rgba(63,185,80,0.3); }
     .badge-drift   { background: rgba(210,153,34,0.12); color: #d29922; border: 1px solid rgba(210,153,34,0.3); }
     .badge-high    { background: rgba(248,81,73,0.12);  color: #f85149; border: 1px solid rgba(248,81,73,0.3); }
 
-    /* ── Section Headers ── */
-    .section-title {
-        color: #e6edf3; font-size: 14px; font-weight: 600;
+    .section-title { color: #e6edf3; font-size: 14px; font-weight: 600;
         letter-spacing: 0.04em; text-transform: uppercase;
-        margin: 28px 0 14px 0; padding-bottom: 10px;
-        border-bottom: 1px solid #2d3348;
-        display: flex; align-items: center; gap: 8px;
-    }
+        margin: 28px 0 14px; padding-bottom: 10px; border-bottom: 1px solid #2d3348; }
 
-    /* ── Alert Feed ── */
-    .alert-item {
-        background: rgba(248,81,73,0.06);
-        border: 1px solid rgba(248,81,73,0.25);
-        border-left: 3px solid #f85149;
-        border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
-    }
-    .alert-item-drift {
-        background: rgba(210,153,34,0.06);
-        border: 1px solid rgba(210,153,34,0.25);
-        border-left: 3px solid #d29922;
-        border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
-    }
+    .alert-item      { background: rgba(248,81,73,0.06);  border: 1px solid rgba(248,81,73,0.25);
+                       border-left: 3px solid #f85149; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; }
+    .alert-item-drift { background: rgba(210,153,34,0.06); border: 1px solid rgba(210,153,34,0.25);
+                        border-left: 3px solid #d29922; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; }
     .alert-id   { color: #e6edf3; font-weight: 600; font-size: 13px; }
     .alert-meta { color: #8b949e; font-size: 12px; margin-top: 4px; }
 
-    /* ── Logo ── */
-    .logo-block {
-        padding: 20px 4px 16px;
-        border-bottom: 1px solid #2d3348;
-        margin-bottom: 20px;
-    }
-    .logo-name {
-        font-size: 17px; font-weight: 700;
+    .logo-block { padding: 20px 4px 16px; border-bottom: 1px solid #2d3348; margin-bottom: 20px; }
+    .logo-name  { font-size: 17px; font-weight: 700;
         background: linear-gradient(90deg, #58a6ff, #bc8cff);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-    .logo-sub  { color: #8b949e; font-size: 11px; margin-top: 4px; }
-    .status-dot-live   { display:inline-block; width:7px; height:7px; border-radius:50%; background:#3fb950; margin-right:5px; animation: pulse 2s infinite; }
-    .status-dot-paused { display:inline-block; width:7px; height:7px; border-radius:50%; background:#8b949e; margin-right:5px; }
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .logo-sub   { color: #8b949e; font-size: 11px; margin-top: 4px; }
+    .status-dot-live   { display:inline-block; width:7px; height:7px; border-radius:50%;
+                         background:#3fb950; margin-right:5px; animation: pulse 2s infinite; }
+    .status-dot-paused { display:inline-block; width:7px; height:7px; border-radius:50%;
+                         background:#8b949e; margin-right:5px; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
-    /* ── Divider ── */
+    .tenant-badge { display:inline-block; background:rgba(88,166,255,0.12);
+        border:1px solid rgba(88,166,255,0.3); border-radius:6px;
+        padding:3px 10px; font-size:11px; color:#58a6ff; font-weight:600;
+        letter-spacing:0.05em; text-transform:uppercase; }
+    .mode-badge-pg  { background:rgba(63,185,80,0.1); border:1px solid rgba(63,185,80,0.3);
+        color:#3fb950; border-radius:6px; padding:2px 8px; font-size:10px; font-weight:600; }
+    .mode-badge-sq  { background:rgba(210,153,34,0.1); border:1px solid rgba(210,153,34,0.3);
+        color:#d29922; border-radius:6px; padding:2px 8px; font-size:10px; font-weight:600; }
+
     hr { border-color: #2d3348 !important; }
-
-    /* ── Dataframe ── */
     .stDataFrame { border-radius: 10px; overflow: hidden; }
-
-    /* ── Footer ── */
-    .footer { text-align:center; color:#30363d; font-size:11px; margin-top:48px; padding-top:16px; border-top:1px solid #1c2230; }
+    .footer { text-align:center; color:#30363d; font-size:11px; margin-top:48px;
+              padding-top:16px; border-top:1px solid #1c2230; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── Database ────────────────────────────────────────────────────────────────
-DB_PATH = os.path.join(os.path.dirname(__file__), "telemetry.db")
+
+# ── Data Loading ──────────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=30)
+def get_tenants() -> list[str]:
+    """Fetch available tenant IDs (PostgreSQL mode only)."""
+    if not USE_POSTGRES:
+        return ["default"]
+    try:
+        import psycopg2
+        with psycopg2.connect(os.getenv("DATABASE_URL")) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM tenants ORDER BY created_at")
+                tenants = [row[0] for row in cur.fetchall()]
+        return tenants or ["default"]
+    except Exception as exc:
+        st.warning(f"Could not fetch tenants: {exc}")
+        return ["default"]
 
 
 @st.cache_data(ttl=10)
-def load_data() -> pd.DataFrame:
+def load_data(tenant_id: str = "default") -> pd.DataFrame:
+    """Load executions for the given tenant from the active backend."""
+    if USE_POSTGRES:
+        return _load_postgres(tenant_id)
+    return _load_sqlite()
+
+
+def _load_postgres(tenant_id: str) -> pd.DataFrame:
+    try:
+        import psycopg2
+        with psycopg2.connect(os.getenv("DATABASE_URL")) as conn:
+            df = pd.read_sql(
+                """
+                SELECT incident_id, severity, decision, confidence, step_count,
+                       retry_count, path_taken, execution_time_ms,
+                       drift_score, risk_level, created_at
+                FROM executions
+                WHERE tenant_id = %s
+                ORDER BY created_at DESC
+                LIMIT 500
+                """,
+                conn,
+                params=(tenant_id,),
+            )
+        # Normalise path_taken (JSONB → JSON string for .str.contains())
+        if "path_taken" in df.columns:
+            df["path_taken"] = df["path_taken"].apply(
+                lambda x: json.dumps(x) if isinstance(x, list) else (x or "[]")
+            )
+        return df
+    except Exception as exc:
+        st.error(f"PostgreSQL connection failed: {exc}")
+        return pd.DataFrame()
+
+
+def _load_sqlite() -> pd.DataFrame:
     if not os.path.exists(DB_PATH):
         return pd.DataFrame()
     with sqlite3.connect(DB_PATH) as conn:
-        df = pd.read_sql_query("SELECT * FROM executions ORDER BY created_at DESC", conn)
-    return df
+        return pd.read_sql_query("SELECT * FROM executions ORDER BY created_at DESC", conn)
 
 
-def risk_badge(risk: str) -> str:
-    cls = {
-        "healthy": "badge-healthy",
-        "drift_detected": "badge-drift",
-        "high_risk": "badge-high",
-    }.get(risk, "badge-drift")
-    label = risk.replace("_", " ").title()
-    return f'<span class="badge {cls}">{label}</span>'
+@st.cache_data(ttl=60)
+def get_queue_depth() -> int:
+    """Return Redis queue depth (0 if Redis not configured)."""
+    try:
+        from telemetry.queue import queue_depth
+        return queue_depth()
+    except Exception:
+        return 0
 
 
 def metric_card(col, label: str, value: str, sub: str = ""):
@@ -173,19 +191,30 @@ def metric_card(col, label: str, value: str, sub: str = ""):
     )
 
 
-# ─── Sidebar ─────────────────────────────────────────────────────────────────
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    # Brand header
     auto_refresh = st.toggle("⚡ Auto-Refresh (10s)", value=False, key="auto_refresh")
     status_dot = '<span class="status-dot-live"></span>' if auto_refresh else '<span class="status-dot-paused"></span>'
-    status_text = "Live" if auto_refresh else "Paused"
+    mode_badge = (
+        '<span class="mode-badge-pg">PostgreSQL</span>'
+        if USE_POSTGRES else
+        '<span class="mode-badge-sq">SQLite</span>'
+    )
     st.markdown(
         f"""<div class="logo-block">
             <div class="logo-name">🧠 Drift Detector</div>
-            <div class="logo-sub">{status_dot}{status_text} · Agentic AI Observability</div>
+            <div class="logo-sub">{status_dot}{'Live' if auto_refresh else 'Paused'} &nbsp;·&nbsp; {mode_badge}</div>
         </div>""",
         unsafe_allow_html=True,
     )
+
+    # ── Tenant selector (PostgreSQL mode only) ────────────────────────────────
+    if USE_POSTGRES:
+        st.markdown("### 🏢 Tenant")
+        tenants = get_tenants()
+        selected_tenant = st.selectbox("Active Tenant", tenants, index=0, label_visibility="collapsed")
+    else:
+        selected_tenant = "default"
 
     st.markdown("### ⚙️ Filters")
     min_score = st.slider("Min Drift Score", 0, 100, 0)
@@ -202,8 +231,15 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
-    # DB Stats
-    if os.path.exists(DB_PATH):
+    # Infrastructure stats
+    if USE_POSTGRES:
+        depth = get_queue_depth()
+        st.markdown(
+            f"<div style='color:#8b949e;font-size:12px;'>"
+            f"⚡ Queue depth: <b style='color:#e6edf3'>{depth}</b></div>",
+            unsafe_allow_html=True,
+        )
+    elif os.path.exists(DB_PATH):
         db_size_kb = os.path.getsize(DB_PATH) // 1024
         st.markdown(
             f"<div style='color:#8b949e;font-size:12px;'>"
@@ -211,20 +247,23 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
-# ─── Auto-Refresh Logic ───────────────────────────────────────────────────────
+# ── Auto-Refresh ──────────────────────────────────────────────────────────────
 if auto_refresh:
     time.sleep(10)
     st.cache_data.clear()
     st.rerun()
 
-# ─── Load & Filter ────────────────────────────────────────────────────────────
-df_raw = load_data()
+# ── Load & Filter ─────────────────────────────────────────────────────────────
+df_raw = load_data(selected_tenant)
 
 if df_raw.empty:
     st.title("🧠 Agentic Drift Detector")
-    st.warning(
-        "No telemetry data found. Run `python run.py --simulate-batch 50` to build a baseline first."
+    backend_hint = (
+        f"No data found for tenant **{selected_tenant}** in PostgreSQL."
+        if USE_POSTGRES else
+        "No telemetry data found. Run `python run.py --simulate-batch 50`."
     )
+    st.warning(backend_hint)
     st.stop()
 
 df = df_raw.copy()
@@ -239,12 +278,13 @@ if total == 0:
     st.warning("No records match the current filters.")
     st.stop()
 
-# ─── Page Header ─────────────────────────────────────────────────────────────
+# ── Page Header ───────────────────────────────────────────────────────────────
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
+    tenant_badge = f'<span class="tenant-badge">{selected_tenant}</span>' if USE_POSTGRES else ""
     st.markdown(
-        "<h1 style='color:#e6edf3;font-size:26px;margin-bottom:4px;font-weight:700;'>"
-        "🧠 Agentic Drift Detector</h1>"
+        f"<h1 style='color:#e6edf3;font-size:26px;margin-bottom:4px;font-weight:700;'>"
+        f"🧠 Agentic Drift Detector &nbsp;{tenant_badge}</h1>"
         "<p style='color:#8b949e;font-size:14px;margin-top:0;'>"
         "Real-time behavioral observability for autonomous AI agent workflows.</p>",
         unsafe_allow_html=True,
@@ -256,15 +296,13 @@ with col_h2:
         f"of <b style='color:#e6edf3'>{len(df_raw)}</b> executions</span></div>",
         unsafe_allow_html=True,
     )
-
 st.markdown("<hr style='margin:12px 0 24px;'>", unsafe_allow_html=True)
 
-# ─── KPI Cards ───────────────────────────────────────────────────────────────
-avg_drift    = df["drift_score"].mean()
-avg_latency  = df["execution_time_ms"].mean() / 1000
-avg_retries  = df["retry_count"].mean()
-esc_rate     = (df["decision"] == "escalate").mean() * 100
-heal_count   = (
+# ── KPI Cards ─────────────────────────────────────────────────────────────────
+avg_drift   = df["drift_score"].mean()
+avg_latency = df["execution_time_ms"].mean() / 1000
+esc_rate    = (df["decision"] == "escalate").mean() * 100
+heal_count  = (
     df["path_taken"].str.contains("intervention", na=False).sum()
     if "path_taken" in df.columns else 0
 )
@@ -277,165 +315,99 @@ metric_card(c3, "Avg Latency",     f"{avg_latency:.2f}s")
 metric_card(c4, "Escalation Rate", f"{esc_rate:.1f}%")
 metric_card(c5, "Healing Events",  f"{heal_count:,}",   sub="intervention node")
 metric_card(c6, "High-Risk Runs",  f"{high_risk_ct:,}", sub="score ≥ 60")
-
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ─── Charts Row 1 ────────────────────────────────────────────────────────────
+# ── Charts Row 1 ──────────────────────────────────────────────────────────────
 col_left, col_right = st.columns(2)
 
 with col_left:
-    st.markdown(
-        "<div class='section-title'>📈 Drift Score Over Time</div>",
-        unsafe_allow_html=True,
-    )
-    chart_df = df[["drift_score"]].reset_index(drop=True)
-    chart_df.index.name = "Run #"
-
-    # Rolling average
-    chart_df["rolling_avg"] = chart_df["drift_score"].rolling(10, min_periods=1).mean()
-
+    st.markdown("<div class='section-title'>📈 Drift Score Over Time</div>", unsafe_allow_html=True)
+    cdf = df[["drift_score"]].reset_index(drop=True)
+    cdf["rolling_avg"] = cdf["drift_score"].rolling(10, min_periods=1).mean()
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        y=chart_df["drift_score"], name="Drift Score",
-        line=dict(color=COLORS["blue"], width=1.5),
-        fill="tozeroy", fillcolor="rgba(88,166,255,0.06)",
-        hovertemplate="Run %{x}<br>Score: %{y}<extra></extra>",
-    ))
-    fig.add_trace(go.Scatter(
-        y=chart_df["rolling_avg"], name="10-Run Avg",
+    fig.add_trace(go.Scatter(y=cdf["drift_score"], name="Drift Score",
+        line=dict(color=COLORS["blue"], width=1.5), fill="tozeroy",
+        fillcolor="rgba(88,166,255,0.06)", hovertemplate="Run %{x}<br>Score: %{y}<extra></extra>"))
+    fig.add_trace(go.Scatter(y=cdf["rolling_avg"], name="10-Run Avg",
         line=dict(color=COLORS["purple"], width=2, dash="dot"),
-        hovertemplate="Avg: %{y:.1f}<extra></extra>",
-    ))
-    # Threshold band
-    fig.add_hrect(y0=60, y1=100, fillcolor="rgba(248,81,73,0.05)",
-                  line_width=0, annotation_text="High Risk",
-                  annotation_position="top right",
-                  annotation_font_color=COLORS["red"],
-                  annotation_font_size=11)
-    fig.add_hrect(y0=30, y1=60, fillcolor="rgba(210,153,34,0.04)",
-                  line_width=0)
+        hovertemplate="Avg: %{y:.1f}<extra></extra>"))
+    fig.add_hrect(y0=60, y1=100, fillcolor="rgba(248,81,73,0.05)", line_width=0,
+        annotation_text="High Risk", annotation_position="top right",
+        annotation_font_color=COLORS["red"], annotation_font_size=11)
+    fig.add_hrect(y0=30, y1=60, fillcolor="rgba(210,153,34,0.04)", line_width=0)
     fig.update_layout(**PLOTLY_LAYOUT, height=260, showlegend=True)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 with col_right:
-    st.markdown(
-        "<div class='section-title'>⏱️ Latency Over Time</div>",
-        unsafe_allow_html=True,
-    )
-    lat_df = df[["execution_time_ms"]].reset_index(drop=True)
-    lat_df["rolling_avg"] = lat_df["execution_time_ms"].rolling(10, min_periods=1).mean()
-    lat_df.index.name = "Run #"
-
+    st.markdown("<div class='section-title'>⏱️ Latency Over Time</div>", unsafe_allow_html=True)
+    ldf = df[["execution_time_ms"]].reset_index(drop=True)
+    ldf["rolling_avg"] = ldf["execution_time_ms"].rolling(10, min_periods=1).mean()
     fig2 = go.Figure()
-    fig2.add_trace(go.Scatter(
-        y=lat_df["execution_time_ms"], name="Latency (ms)",
-        line=dict(color=COLORS["green"], width=1.5),
-        fill="tozeroy", fillcolor="rgba(63,185,80,0.06)",
-        hovertemplate="Run %{x}<br>Latency: %{y} ms<extra></extra>",
-    ))
-    fig2.add_trace(go.Scatter(
-        y=lat_df["rolling_avg"], name="10-Run Avg",
+    fig2.add_trace(go.Scatter(y=ldf["execution_time_ms"], name="Latency (ms)",
+        line=dict(color=COLORS["green"], width=1.5), fill="tozeroy",
+        fillcolor="rgba(63,185,80,0.06)", hovertemplate="Run %{x}<br>%{y} ms<extra></extra>"))
+    fig2.add_trace(go.Scatter(y=ldf["rolling_avg"], name="10-Run Avg",
         line=dict(color=COLORS["yellow"], width=2, dash="dot"),
-        hovertemplate="Avg: %{y:.0f} ms<extra></extra>",
-    ))
+        hovertemplate="Avg: %{y:.0f} ms<extra></extra>"))
     fig2.update_layout(**PLOTLY_LAYOUT, height=260, showlegend=True)
     st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
 
-# ─── Charts Row 2 ────────────────────────────────────────────────────────────
+# ── Charts Row 2 ──────────────────────────────────────────────────────────────
 col_l2, col_r2 = st.columns(2)
 
 with col_l2:
-    st.markdown(
-        "<div class='section-title'>📊 Severity Distribution</div>",
-        unsafe_allow_html=True,
-    )
-    sev_counts = df["severity"].value_counts().reset_index()
-    sev_counts.columns = ["Severity", "Count"]
-    sev_color_map = {"low": COLORS["green"], "medium": COLORS["yellow"], "high": COLORS["red"]}
-    fig3 = px.bar(
-        sev_counts, x="Count", y="Severity", orientation="h",
-        color="Severity", color_discrete_map=sev_color_map,
-        text="Count",
-    )
-    fig3.update_traces(
-        textposition="outside",
-        textfont_color=COLORS["text"],
-        marker_line_width=0,
-    )
-    fig3.update_layout(**PLOTLY_LAYOUT, height=200, showlegend=False,
-                       bargap=0.35)
+    st.markdown("<div class='section-title'>📊 Severity Distribution</div>", unsafe_allow_html=True)
+    sev = df["severity"].value_counts().reset_index()
+    sev.columns = ["Severity", "Count"]
+    fig3 = px.bar(sev, x="Count", y="Severity", orientation="h", color="Severity",
+        color_discrete_map={"low": COLORS["green"], "medium": COLORS["yellow"], "high": COLORS["red"]},
+        text="Count")
+    fig3.update_traces(textposition="outside", textfont_color=COLORS["text"], marker_line_width=0)
+    fig3.update_layout(**PLOTLY_LAYOUT, height=200, showlegend=False, bargap=0.35)
     st.plotly_chart(fig3, use_container_width=True, config={"displayModeBar": False})
 
 with col_r2:
-    st.markdown(
-        "<div class='section-title'>🎯 Decision Distribution</div>",
-        unsafe_allow_html=True,
-    )
-    dec_counts = df["decision"].value_counts().reset_index()
-    dec_counts.columns = ["Decision", "Count"]
-    dec_color_map = {
-        "auto_resolve": COLORS["green"],
-        "escalate": COLORS["red"],
-    }
-    fig4 = px.bar(
-        dec_counts, x="Count", y="Decision", orientation="h",
-        color="Decision", color_discrete_map=dec_color_map,
-        text="Count",
-    )
-    fig4.update_traces(
-        textposition="outside",
-        textfont_color=COLORS["text"],
-        marker_line_width=0,
-    )
-    fig4.update_layout(**PLOTLY_LAYOUT, height=200, showlegend=False,
-                       bargap=0.35)
+    st.markdown("<div class='section-title'>🎯 Decision Distribution</div>", unsafe_allow_html=True)
+    dec = df["decision"].value_counts().reset_index()
+    dec.columns = ["Decision", "Count"]
+    fig4 = px.bar(dec, x="Count", y="Decision", orientation="h", color="Decision",
+        color_discrete_map={"auto_resolve": COLORS["green"], "escalate": COLORS["red"]},
+        text="Count")
+    fig4.update_traces(textposition="outside", textfont_color=COLORS["text"], marker_line_width=0)
+    fig4.update_layout(**PLOTLY_LAYOUT, height=200, showlegend=False, bargap=0.35)
     st.plotly_chart(fig4, use_container_width=True, config={"displayModeBar": False})
 
-# ─── Risk Level Breakdown ─────────────────────────────────────────────────────
+# ── Risk Level Breakdown ──────────────────────────────────────────────────────
 if "risk_level" in df.columns:
-    st.markdown(
-        "<div class='section-title'>🔰 Risk Level Breakdown</div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("<div class='section-title'>🔰 Risk Level Breakdown</div>", unsafe_allow_html=True)
     risk_counts = df["risk_level"].value_counts().reset_index()
     risk_counts.columns = ["Risk Level", "Count"]
     risk_counts["Percentage"] = (risk_counts["Count"] / total * 100).round(1).astype(str) + "%"
-
     r_cols = st.columns(len(risk_counts))
-    color_cls = {
-        "healthy": ("risk-healthy", "3fb950"),
-        "drift_detected": ("risk-drift", "d29922"),
-        "high_risk": ("risk-high", "f85149"),
-    }
+    color_cls = {"healthy": ("risk-healthy", "3fb950"),
+                 "drift_detected": ("risk-drift", "d29922"), "high_risk": ("risk-high", "f85149")}
     for i, row in risk_counts.iterrows():
         cls, hex_c = color_cls.get(row["Risk Level"], ("", "58a6ff"))
         r_cols[i].markdown(
             f"<div class='metric-card' style='border-color:#{hex_c}22;'>"
-            f"<div class='metric-label'>{row['Risk Level'].replace('_', ' ').title()}</div>"
+            f"<div class='metric-label'>{row['Risk Level'].replace('_',' ').title()}</div>"
             f"<div class='metric-value {cls}'>{row['Count']}</div>"
-            f"<div class='metric-sub'>{row['Percentage']}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+            f"<div class='metric-sub'>{row['Percentage']}</div></div>",
+            unsafe_allow_html=True)
 
-# ─── Alert Feed ───────────────────────────────────────────────────────────────
+# ── Alert Feed ────────────────────────────────────────────────────────────────
 st.markdown("<div class='section-title'>🚨 Recent Alerts</div>", unsafe_allow_html=True)
-
-alert_df = df_raw[df_raw["risk_level"].isin(["high_risk", "drift_detected"])].head(5) \
-    if "risk_level" in df_raw.columns else pd.DataFrame()
-
+alert_df = (df_raw[df_raw["risk_level"].isin(["high_risk", "drift_detected"])].head(5)
+            if "risk_level" in df_raw.columns else pd.DataFrame())
 if alert_df.empty:
     st.markdown(
         "<div style='color:#3fb950;padding:12px;background:rgba(63,185,80,0.06);"
         "border:1px solid rgba(63,185,80,0.2);border-radius:8px;font-size:13px;'>"
-        "✅ No active alerts — all executions are healthy.</div>",
-        unsafe_allow_html=True,
-    )
+        "✅ No active alerts — all executions are healthy.</div>", unsafe_allow_html=True)
 else:
     for _, row in alert_df.iterrows():
         css_cls = "alert-item" if row["risk_level"] == "high_risk" else "alert-item-drift"
         icon = "🔴" if row["risk_level"] == "high_risk" else "🟡"
-        ts = row.get("created_at", "—")
         st.markdown(
             f"<div class='{css_cls}'>"
             f"<div class='alert-id'>{icon} Incident <code>{row['incident_id']}</code> "
@@ -443,39 +415,30 @@ else:
             f"<div class='alert-meta'>"
             f"Severity: {row.get('severity','—')} &nbsp;·&nbsp; "
             f"Decision: {row.get('decision','—')} &nbsp;·&nbsp; "
-            f"Retries: {row.get('retry_count', 0)} &nbsp;·&nbsp; "
-            f"<span style='color:#3d444d'>{ts}</span>"
-            f"</div></div>",
-            unsafe_allow_html=True,
-        )
+            f"Retries: {row.get('retry_count',0)} &nbsp;·&nbsp; "
+            f"<span style='color:#3d444d'>{row.get('created_at','—')}</span>"
+            f"</div></div>", unsafe_allow_html=True)
 
-# ─── Recent Executions Table ──────────────────────────────────────────────────
+# ── Recent Executions Table ───────────────────────────────────────────────────
 st.markdown("<div class='section-title'>📋 Recent Executions</div>", unsafe_allow_html=True)
-
-display_cols = [
-    c for c in [
-        "incident_id", "severity", "decision", "confidence",
-        "retry_count", "drift_score", "risk_level", "execution_time_ms", "created_at",
-    ]
-    if c in df.columns
-]
-
+display_cols = [c for c in [
+    "incident_id", "severity", "decision", "confidence",
+    "retry_count", "drift_score", "risk_level", "execution_time_ms", "created_at",
+] if c in df.columns]
 st.dataframe(
-    df[display_cols].head(50),
-    use_container_width=True,
-    hide_index=True,
+    df[display_cols].head(50), use_container_width=True, hide_index=True,
     column_config={
-        "drift_score":       st.column_config.ProgressColumn(
-            "Drift Score", min_value=0, max_value=100, format="%d"
-        ),
+        "drift_score":       st.column_config.ProgressColumn("Drift Score", min_value=0, max_value=100, format="%d"),
         "confidence":        st.column_config.NumberColumn("Confidence", format="%.2f"),
         "execution_time_ms": st.column_config.NumberColumn("Latency (ms)", format="%d ms"),
         "risk_level":        st.column_config.TextColumn("Risk Level"),
     },
 )
 
-# ─── Footer ───────────────────────────────────────────────────────────────────
+# ── Footer ────────────────────────────────────────────────────────────────────
+backend_label = "PostgreSQL + TimescaleDB" if USE_POSTGRES else "SQLite"
 st.markdown(
-    "<div class='footer'>Agentic Drift Detector &nbsp;·&nbsp; Built with LangGraph &amp; Streamlit</div>",
+    f"<div class='footer'>Agentic Drift Detector &nbsp;·&nbsp; "
+    f"Built with LangGraph &amp; Streamlit &nbsp;·&nbsp; {backend_label}</div>",
     unsafe_allow_html=True,
 )

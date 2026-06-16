@@ -1,136 +1,87 @@
 """
-Telemetry persistence layer.
+telemetry/store.py — Backend router.
 
-Stores execution state and drift analysis in a local SQLite database and
-provides aggregated historical metrics for the drift detection engine.
+Delegates all calls to the correct backend based on environment:
+  - DATABASE_URL set   → PostgreSQL + TimescaleDB (telemetry/postgres_store.py)
+  - DATABASE_URL unset → SQLite fallback            (telemetry/sqlite_store.py)
+
+Public API is identical regardless of backend:
+    init_db()
+    save_execution_state(state, analysis, *, tenant_id=None)
+    get_historical_metrics(limit, *, tenant_id=None)
+
+This module is imported by run.py, drift_detector.py, and the test suite.
+The test conftest patches DB_PATH here AND in sqlite_store to ensure isolation.
 """
 
-import json
 import logging
 import os
-import sqlite3
 
-from schemas.incident_state import IncidentState
+# Re-export DB_PATH from SQLite store for backward compatibility.
+# Only meaningful when DATABASE_URL is not set.
+from telemetry.sqlite_store import DB_PATH  # noqa: F401
 
 log = logging.getLogger(__name__)
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "telemetry.db")
+_USE_POSTGRES = bool(os.getenv("DATABASE_URL"))
 
 
-# ─── Schema ──────────────────────────────────────────────────────────────────
-
-_CREATE_TABLE = """
-    CREATE TABLE IF NOT EXISTS executions (
-        id                INTEGER PRIMARY KEY AUTOINCREMENT,
-        incident_id       TEXT,
-        severity          TEXT,
-        decision          TEXT,
-        confidence        REAL,
-        step_count        INTEGER,
-        retry_count       INTEGER,
-        path_taken        TEXT,
-        execution_time_ms INTEGER,
-        drift_score       INTEGER DEFAULT 0,
-        risk_level        TEXT    DEFAULT 'healthy',
-        created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-"""
-
-_MIGRATIONS = [
-    ("drift_score", "INTEGER DEFAULT 0"),
-    ("risk_level",  "TEXT DEFAULT 'healthy'"),
-    ("created_at",  "DATETIME DEFAULT CURRENT_TIMESTAMP"),
-]
-
-_INSERT = """
-    INSERT INTO executions (
-        incident_id, severity, decision, confidence,
-        step_count, retry_count, path_taken, execution_time_ms,
-        drift_score, risk_level
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-"""
-
-_BASELINE_QUERY = """
-    SELECT
-        AVG(step_count)  AS avg_steps,
-        AVG(retry_count) AS avg_retries,
-        AVG(execution_time_ms) AS avg_latency,
-        AVG(CASE WHEN decision = 'escalate' THEN 1.0 ELSE 0.0 END) AS escalation_rate,
-        AVG(CASE WHEN severity = 'high'     THEN 1.0 ELSE 0.0 END) AS high_severity_rate,
-        AVG(CASE WHEN severity = 'low'
-                 THEN CASE WHEN decision = 'escalate' THEN 1.0 ELSE 0.0 END
-                 ELSE NULL END) AS low_severity_escalation_rate
-    FROM (
-        SELECT step_count, retry_count, execution_time_ms, decision, severity
-        FROM executions
-        ORDER BY id DESC
-        LIMIT ?
-    )
-"""
-
-_DEFAULT_BASELINE = {
-    "avg_steps": 4.0,
-    "avg_retries": 0.0,
-    "avg_latency": 100.0,
-    "escalation_rate": 0.2,
-    "high_severity_rate": 0.2,
-    "low_severity_escalation_rate": 0.05,
-}
+def _backend():
+    """Return the active backend module (lazy import to avoid import-time side effects)."""
+    if _USE_POSTGRES:
+        try:
+            import telemetry.postgres_store as _pg
+            return _pg
+        except ImportError as exc:
+            raise RuntimeError(
+                f"DATABASE_URL is set but the PostgreSQL driver is missing: {exc}\n"
+                "Fix: pip install psycopg2-binary"
+            ) from exc
+    import telemetry.sqlite_store as _sq
+    return _sq
 
 
-# ─── Public API ──────────────────────────────────────────────────────────────
+# ── Public API (thin delegation) ──────────────────────────────────────────────
 
 def init_db() -> None:
-    """Create the executions table and apply any pending column migrations."""
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(_CREATE_TABLE)
-        for col, definition in _MIGRATIONS:
-            try:
-                conn.execute(f"ALTER TABLE executions ADD COLUMN {col} {definition}")
-            except sqlite3.OperationalError:
-                pass  # Column already exists — safe to ignore
-        conn.commit()
-    log.debug("Database initialised at %s", DB_PATH)
+    """Initialise the active database backend (create tables, run migrations)."""
+    _backend().init_db()
 
 
-def save_execution_state(state: IncidentState, analysis: dict | None = None) -> None:
-    """Persist a completed workflow execution with its drift analysis."""
-    values = (
-        state.get("incident_id"),
-        state.get("severity"),
-        state.get("decision"),
-        state.get("confidence"),
-        state.get("step_count", 0),
-        state.get("retry_count", 0),
-        json.dumps(state.get("path_taken", [])),
-        state.get("execution_time_ms", 0),
-        analysis.get("drift_score", 0) if analysis else 0,
-        analysis.get("risk_level", "healthy") if analysis else "healthy",
-    )
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(_INSERT, values)
-        conn.commit()
-    log.debug("Saved execution %s (drift_score=%s)", state.get("incident_id"), values[-2])
-
-
-def get_historical_metrics(limit: int = 100) -> dict:
+def save_execution_state(
+    state,
+    analysis: dict | None = None,
+    *,
+    tenant_id: str | None = None,
+) -> None:
     """
-    Return population-level baseline metrics from the last *limit* executions.
-    Falls back to safe defaults when the database is empty.
+    Persist one execution record.
+
+    tenant_id defaults to the TENANT_ID env var (resolved in postgres_store)
+    and is silently ignored by the SQLite backend.
     """
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        row = conn.execute(_BASELINE_QUERY, (limit,)).fetchone()
+    kwargs = {}
+    if tenant_id is not None:
+        kwargs["tenant_id"] = tenant_id
+    _backend().save_execution_state(state, analysis, **kwargs)
 
-    if not row or row["avg_steps"] is None:
-        log.debug("Empty database — using default baseline metrics.")
-        return dict(_DEFAULT_BASELINE)
 
-    return {
-        "avg_steps":                   row["avg_steps"],
-        "avg_retries":                 row["avg_retries"],
-        "avg_latency":                 row["avg_latency"],
-        "escalation_rate":             row["escalation_rate"]             or 0.2,
-        "high_severity_rate":          row["high_severity_rate"]          or 0.2,
-        "low_severity_escalation_rate": row["low_severity_escalation_rate"] or 0.05,
-    }
+def get_historical_metrics(
+    limit: int = 100,
+    *,
+    tenant_id: str | None = None,
+) -> dict:
+    """
+    Return population-level baseline metrics.
+
+    In PostgreSQL mode the query is scoped to tenant_id (defaults to
+    TENANT_ID env var). In SQLite mode tenant_id is ignored.
+    """
+    if _USE_POSTGRES and tenant_id is None:
+        from config.tenant import get_current_tenant
+        tenant_id = get_current_tenant()
+
+    kwargs = {}
+    if tenant_id is not None:
+        kwargs["tenant_id"] = tenant_id
+    return _backend().get_historical_metrics(limit, **kwargs)

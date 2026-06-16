@@ -16,6 +16,13 @@ python-dotenv>=1.0,<2
 # HTTP
 requests>=2.31,<3
 
+# ── Tier 1 SaaS additions ──────────────────────────────────────
+# PostgreSQL driver (binary package — no system libpq required)
+psycopg2-binary>=2.9,<3
+
+# Redis client (async telemetry queue)
+redis>=5.0,<6
+
 # Testing
 pytest>=8.0,<9
 pytest-cov>=5.0,<6
