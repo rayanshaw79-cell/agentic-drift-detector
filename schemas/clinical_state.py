@@ -25,7 +25,14 @@ class ClinicalState(TypedDict):
 
     # ── Coded Outputs (Ontology Lookup + Disambiguation) ──────────────────────
     icd10_codes: Optional[List[dict]]
-    # Each dict: {term, code, description, confidence, hcc, hcc_category, raf_weight}
+    # Each dict after MEAT validation:
+    #   {term, code, description, confidence, hcc, hcc_category, raf_weight,
+    #    meat_met, meat_category, meat_evidence}
+
+    # ── MEAT Validation (raw audit trail from meat_validation_step) ───────────
+    # List of raw MEAT decisions from the LLM (one per ICD-10 code).
+    # Preserved separately for audit logging and dashboard display.
+    meat_results: Optional[List[dict]]
 
     # ── Final Output ──────────────────────────────────────────────────────────
     clinical_record: Optional[dict]      # Structured Python dict output

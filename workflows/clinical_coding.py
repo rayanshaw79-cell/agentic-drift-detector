@@ -2,16 +2,16 @@
 workflows/clinical_coding.py — LangGraph state machine for Clinical Coding Agent.
 
 Graph topology:
-    NER → Ontology Lookup → Disambiguation → Validation
-                                                  ↓
+    NER → Ontology Lookup → Disambiguation → MEAT Validation → Validation
+                                                                        ↓
                           [conditional: retry / clinical_intervention / clinical_output]
-                                                  ↓
-                                         Clinical Output (END)
+                                                                        ↓
+                                                           Clinical Output (END)
 
-The conditional edge mirrors should_retry() from incident_triage.py:
-  - overall_confidence < 0.65 AND retry_count < 2 → retry disambiguation
-  - overall_confidence < 0.65 AND retry_count >= 2 → clinical_intervention
-  - otherwise → clinical_output
+The MEAT Validation node (new) ensures every ICD-10 code is backed by
+documented clinical action before it can contribute to HCC Risk Adjustment.
+This prevents audit failures under Medicare RADV (Risk Adjustment Data
+Validation) rules.
 """
 
 from langgraph.graph import StateGraph, END
@@ -20,6 +20,7 @@ from schemas.clinical_state import ClinicalState
 from clinical.steps.ner_step import ner_step
 from clinical.steps.ontology_lookup_step import ontology_lookup_step
 from clinical.steps.disambiguation_step import disambiguation_step
+from clinical.steps.meat_validation_step import meat_validation_step
 from clinical.steps.validation_step import validation_step
 from clinical.steps.clinical_intervention_step import clinical_intervention_step
 from clinical.steps.clinical_output_step import clinical_output_step
@@ -57,15 +58,17 @@ def build_clinical_workflow() -> StateGraph:
     workflow.add_node("ner",                   ner_step)
     workflow.add_node("ontology_lookup",        ontology_lookup_step)
     workflow.add_node("disambiguation",         disambiguation_step)
+    workflow.add_node("meat_validation",        meat_validation_step)   # NEW
     workflow.add_node("validation",             validation_step)
     workflow.add_node("clinical_intervention",  clinical_intervention_step)
     workflow.add_node("clinical_output",        clinical_output_step)
 
-    # Linear path
+    # Linear path: NER → Lookup → Disambiguation → MEAT Validation → Validation
     workflow.set_entry_point("ner")
-    workflow.add_edge("ner",            "ontology_lookup")
+    workflow.add_edge("ner",             "ontology_lookup")
     workflow.add_edge("ontology_lookup", "disambiguation")
-    workflow.add_edge("disambiguation",  "validation")
+    workflow.add_edge("disambiguation",  "meat_validation")   # NEW
+    workflow.add_edge("meat_validation", "validation")         # NEW
 
     # Conditional routing after validation
     workflow.add_conditional_edges(

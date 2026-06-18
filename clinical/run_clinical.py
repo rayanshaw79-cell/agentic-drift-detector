@@ -56,6 +56,7 @@ def create_initial_state(raw_note: str) -> ClinicalState:
         "clinical_record":       None,
         "coding_status":         None,
         "claims_ready":          None,
+        "meat_results":          None,
         "overall_confidence":    None,
         "current_step":          "",
         "step_count":            0,

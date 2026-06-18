@@ -9,9 +9,12 @@ Validation rules:
   2. Every code must have confidence ≥ 0.5 to be included in output.
   3. At least one valid code must exist for the record to be "complete".
 
-New in this version (Miimansa-inspired):
-  4. Adds claims_ready flag: confidence >= 0.85 and status == complete
-  5. Enriches each code with HCC category and RAF weight (risk adjustment)
+Miimansa-inspired upgrades:
+  4. HCC enrichment with CMS RAF weights.
+  5. claims_ready flag (confidence ≥ 0.85 AND MEAT criteria satisfied).
+  6. Respects MEAT validation flags — RAF weight already zeroed by
+     meat_validation_step for non-MEAT codes; this step counts only
+     MEAT-validated codes toward claims_ready.
 """
 
 import logging
@@ -76,15 +79,33 @@ def validation_step(state: ClinicalState) -> dict:
     else:
         coding_status = "complete"
 
-    # ── Claims-Readiness Flag ─────────────────────────────────────────────────
-    # A record is claims-ready if ALL valid codes meet the higher confidence bar
-    # and the overall coding status is complete.
-    # This directly supports payer claims adjudication use cases (Miimansa).
+    # ── Claims-Readiness Flag (MEAT-aware) ───────────────────────────────────
+    # A record is claims-ready if:
+    #   1. Coding status is complete
+    #   2. At least one code passed MEAT criteria (meat_met = True)
+    #   3. All MEAT-validated codes meet the confidence threshold
+    #
+    # NOTE: RAF weights were already zeroed for non-MEAT codes by
+    # meat_validation_step. This ensures fraudulent risk adjustment
+    # cannot happen even if claims_ready is mistakenly set elsewhere.
+    meat_valid_codes = [c for c in valid_codes if c.get("meat_met", True)]
+    meat_invalid_codes = [c for c in valid_codes if not c.get("meat_met", True)]
+
     claims_ready = (
         coding_status == "complete"
-        and len(valid_codes) > 0
-        and all(c.get("confidence", 0.0) >= _CLAIMS_READY_THRESHOLD for c in valid_codes)
+        and len(meat_valid_codes) > 0
+        and all(
+            c.get("confidence", 0.0) >= _CLAIMS_READY_THRESHOLD
+            for c in meat_valid_codes
+        )
     )
+
+    if meat_invalid_codes:
+        log.info(
+            "[VALIDATION] %d code(s) excluded from claims due to failed MEAT: %s",
+            len(meat_invalid_codes),
+            [c["code"] for c in meat_invalid_codes],
+        )
 
     # ── Assemble the structured clinical record ───────────────────────────────
     clinical_record = {
@@ -97,6 +118,15 @@ def validation_step(state: ClinicalState) -> dict:
         "status":            coding_status,
         "claims_ready":      claims_ready,
         "total_raf_weight":  total_raf,
+        # MEAT audit summary
+        "meat_summary": {
+            "total_validated":   len(valid_codes),
+            "meat_passed":       len(meat_valid_codes),
+            "meat_failed":       len(meat_invalid_codes),
+            "meat_pass_rate":    round(
+                len(meat_valid_codes) / len(valid_codes), 2
+            ) if valid_codes else 0.0,
+        },
         # Bayesian ensemble summary
         "ner_ensemble": {
             "total_candidates": len(ner_votes),
