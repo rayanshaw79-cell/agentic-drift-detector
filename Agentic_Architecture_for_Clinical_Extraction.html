@@ -1,0 +1,124 @@
+<html><head><meta charset="utf-8">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 2rem; color: #333; }
+  h1, h2, h3 { color: #111; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }
+  blockquote { border-left: 4px solid #dfe2e5; color: #6a737d; padding: 0 1em; }
+  pre { background-color: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; }
+  .mermaid { text-align: center; margin: 2rem 0; }
+</style>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true });
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll("code.language-mermaid").forEach(el => {
+      const div = document.createElement("div");
+      div.className = "mermaid";
+      div.textContent = el.textContent;
+      el.parentNode.replaceWith(div);
+    });
+  });
+</script>
+</head><body><h1>Scaling Clinical Data Extraction: An Agentic Architecture for Mitigating Hallucinations and Audit Risk</h1>
+<hr />
+<h2>1. The Context &amp; Baseline Architecture</h2>
+<p>The current transition in clinical data extraction relies heavily on combining foundational Large Language Models (LLMs) with deterministic models via a Bayesian Ensemble. This approach is highly robust and establishes an excellent baseline for initial Clinical Named Entity Recognition (NER). By bridging probabilistic reasoning with deterministic rules, it successfully solves the initial recall versus precision tradeoff inherent in processing unstructured electronic health records (EHR).</p>
+<p>However, as extraction systems scale toward <strong>automated, claims-ready Hierarchical Condition Category (HCC) coding</strong>, the technical requirements shift. The goal is no longer just identifying medical concepts; it is ensuring absolute chronological accuracy, strict attribution, and Medicare compliance at scale.</p>
+<h2>2. The Scaling Challenges</h2>
+<p>Transitioning from "data extraction" to "automated Risk Adjustment coding" exposes several critical bottlenecks that standard LLM ensembles struggle to handle gracefully.</p>
+<h3>Challenge A: Temporal and Experiencer Hallucinations</h3>
+<p>Clinical notes are notoriously dense with negated historical rule-outs and complex family histories (e.g., <em>"Patient's mother had breast cancer. Patient denies chest pain."</em>). LLMs, even when functioning within an ensemble, frequently struggle with attribution context boundaries. Without strict upstream control, models will silently poison the downstream Real-World Evidence (RWE) dataset by confidently assigning active disease weights to negated or family conditions.</p>
+<h3>Challenge B: The "MEAT" Criteria Audit Risk</h3>
+<p>In Medicare Risk Adjustment Data Validation (RADV) audits, extracting a condition is legally insufficient for revenue capture. The provider must explicitly document that the condition was <strong>Monitored, Evaluated, Assessed, or Treated (MEAT)</strong> during the specific encounter. If an AI extracts "Diabetes" from a "Past Medical History" block but the provider took no action on it during the visit, Medicare considers that code invalid. Submitting it results in compliance violations and financial clawbacks.</p>
+<h3>Challenge C: Compute Routing and Financial Scale</h3>
+<p>Executing a full Bayesian ensemble (calling multiple APIs concurrently) takes several seconds and incurs high token costs per note. Applying this heavy compute layer universally—even to simple routine checkups—results in unnecessary financial bloat.</p>
+<hr />
+<h2>3. The Proposed Solution: An Intercepting Agentic Framework</h2>
+<p>To resolve these bottlenecks, we propose wrapping the core Bayesian Ensemble in an <strong>Agentic Framework</strong>. Rather than trying to force the LLM to perfect its extraction, we introduce deterministic, specialized "Sub-Agents" that intercept failure modes before they reach the claims engine. </p>
+<h3>High-Level System Architecture</h3>
+<div class="codehilite"><pre><span></span><code><span class="nt">graph</span><span class="w"> </span><span class="nt">TD</span>
+<span class="w">    </span><span class="nt">A</span><span class="cp">[</span><span class="nb">Raw</span><span class="w"> </span><span class="nx">Clinical</span><span class="w"> </span><span class="nx">Note</span><span class="cp">]</span><span class="w"> </span><span class="nt">--</span><span class="o">&gt;</span><span class="w"> </span><span class="nt">B</span><span class="o">(</span><span class="nt">Bayesian</span><span class="w"> </span><span class="nt">Ensemble</span><span class="w"> </span><span class="nt">NER</span><span class="o">)</span>
+<span class="w">    </span><span class="nt">B</span><span class="w"> </span><span class="nt">--</span><span class="o">&gt;</span><span class="w"> </span><span class="nt">C</span><span class="p">{</span><span class="err">Context</span><span class="w"> </span><span class="err">Pre-Processor</span><span class="w"> </span><span class="err">Agent</span><span class="p">}</span>
+
+<span class="w">    </span><span class="nt">C</span><span class="w"> </span><span class="nt">--</span><span class="o">&gt;|</span><span class="nt">Patient</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="nt">Active</span><span class="o">|</span><span class="w"> </span><span class="nt">D</span><span class="o">(</span><span class="nt">Ontology</span><span class="w"> </span><span class="nt">Router</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nt">ICD-10</span><span class="o">)</span>
+<span class="w">    </span><span class="nt">C</span><span class="w"> </span><span class="nt">--</span><span class="o">&gt;|</span><span class="nt">Family</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nt">Historical</span><span class="o">|</span><span class="w"> </span><span class="nt">X</span><span class="cp">[</span><span class="nx">Discard</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="nx">Zero</span><span class="w"> </span><span class="nx">Weight</span><span class="cp">]</span>
+
+<span class="w">    </span><span class="nt">D</span><span class="w"> </span><span class="nt">--</span><span class="o">&gt;</span><span class="w"> </span><span class="nt">E</span><span class="p">{</span><span class="err">MEAT</span><span class="w"> </span><span class="err">Validation</span><span class="w"> </span><span class="err">Sub-Agent</span><span class="p">}</span>
+
+<span class="w">    </span><span class="nt">E</span><span class="w"> </span><span class="nt">--</span><span class="o">&gt;|</span><span class="nt">Proof</span><span class="w"> </span><span class="nt">Found</span><span class="o">|</span><span class="w"> </span><span class="nt">F</span><span class="cp">[</span><span class="nx">HCC</span><span class="w"> </span><span class="nx">Weighting</span><span class="w"> </span><span class="nx">Engine</span><span class="cp">]</span>
+<span class="w">    </span><span class="nt">E</span><span class="w"> </span><span class="nt">--</span><span class="o">&gt;|</span><span class="nt">No</span><span class="w"> </span><span class="nt">Proof</span><span class="w"> </span><span class="nt">Found</span><span class="o">|</span><span class="w"> </span><span class="nt">X</span>
+
+<span class="w">    </span><span class="nt">F</span><span class="w"> </span><span class="nt">--</span><span class="o">&gt;</span><span class="w"> </span><span class="nt">G</span><span class="cp">[</span><span class="nx">Claims</span><span class="na">-Ready</span><span class="w"> </span><span class="nx">RWE</span><span class="w"> </span><span class="nx">Database</span><span class="cp">]</span>
+
+<span class="w">    </span><span class="nt">classDef</span><span class="w"> </span><span class="nt">agent</span><span class="w"> </span><span class="nt">fill</span><span class="o">:</span><span class="p">#</span><span class="nn">e1f5fe</span><span class="o">,</span><span class="nt">stroke</span><span class="o">:</span><span class="p">#</span><span class="nn">01579b</span><span class="o">,</span><span class="nt">stroke-width</span><span class="p">:</span><span class="nd">2px</span><span class="o">;</span>
+<span class="w">    </span><span class="nt">classDef</span><span class="w"> </span><span class="nt">core</span><span class="w"> </span><span class="nt">fill</span><span class="o">:</span><span class="p">#</span><span class="nn">fff3e0</span><span class="o">,</span><span class="nt">stroke</span><span class="o">:</span><span class="p">#</span><span class="nn">e65100</span><span class="o">,</span><span class="nt">stroke-width</span><span class="p">:</span><span class="nd">2px</span><span class="o">;</span>
+<span class="w">    </span><span class="nt">classDef</span><span class="w"> </span><span class="nt">terminal</span><span class="w"> </span><span class="nt">fill</span><span class="o">:</span><span class="p">#</span><span class="nn">f3e5f5</span><span class="o">,</span><span class="nt">stroke</span><span class="o">:</span><span class="p">#</span><span class="nn">4a148c</span><span class="o">,</span><span class="nt">stroke-width</span><span class="p">:</span><span class="nd">2px</span><span class="o">;</span>
+
+<span class="w">    </span><span class="nt">class</span><span class="w"> </span><span class="nt">C</span><span class="o">,</span><span class="nt">E</span><span class="w"> </span><span class="nt">agent</span><span class="o">;</span>
+<span class="w">    </span><span class="nt">class</span><span class="w"> </span><span class="nt">B</span><span class="o">,</span><span class="nt">D</span><span class="w"> </span><span class="nt">core</span><span class="o">;</span>
+<span class="w">    </span><span class="nt">class</span><span class="w"> </span><span class="nt">G</span><span class="w"> </span><span class="nt">terminal</span><span class="o">;</span>
+</code></pre></div>
+
+<h3>3.1. The Context Pre-Processor Agent</h3>
+<p>Before the ensemble expends compute on disambiguation, an upstream agent runs strictly on the extracted tokens to classify the <strong>Experiencer</strong> (Patient vs. Family) and <strong>Status</strong> (Active vs. Historical). If an entity is flagged as negated, it is immediately dropped from the pipeline, completely neutralizing temporal hallucinations.</p>
+<h3>3.2. The MEAT Validation Sub-Agent</h3>
+<p>Once an active condition is mapped to an ICD-10 code, a secondary agent scans the localized context of the extraction. It specifically hunts for cryptographic proof of clinical action (dosage adjustments, lab orders, referrals). If proof is found, it attaches the exact verbatim string to the payload as an audit trail. If no proof is found, the agent explicitly zeroes out the financial Risk Adjustment Factor (RAF) weight.</p>
+<h3>Agentic Workflow Execution</h3>
+<div class="codehilite"><pre><span></span><code>stateDiagram-v2
+    [*] --&gt; NER_Extraction
+    NER_Extraction --&gt; Disambiguation: Entity Extracted
+
+    state Disambiguation {
+        [*] --&gt; Map_ICD10
+        Map_ICD10 --&gt; Lookup_HCC
+    }
+
+    Disambiguation --&gt; MEAT_Validation
+
+    state MEAT_Validation {
+        [*] --&gt; Regex_Fast_Pass
+        Regex_Fast_Pass --&gt; LLM_Deep_Pass: Ambiguous
+        Regex_Fast_Pass --&gt; Result: Match Found
+        LLM_Deep_Pass --&gt; Result
+    }
+
+    MEAT_Validation --&gt; Weight_Calculation: MEAT == True
+    MEAT_Validation --&gt; Zero_Weight: MEAT == False
+
+    Weight_Calculation --&gt; [*]
+    Zero_Weight --&gt; [*]
+</code></pre></div>
+
+<hr />
+<h2>4. Demo Output: Agentic Intervention in Action</h2>
+<p>The framework ensures that the downstream claims engine receives clean, audited, and mathematically accurate data. Below is a live demonstration of the pipeline processing two different scenarios.</p>
+<p><strong>Scenario A: Successful MEAT Validation (Audit Ready)</strong><br />
+<em>Clinical Note:</em> "Patient presents for follow-up on Type 2 Diabetes. Adjusted Metformin dosage to 1000mg."</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;entity&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Type 2 Diabetes&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;icd_10&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;E11.9&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;hcc_category&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Diabetes without Complication&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;meat_validated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;meat_evidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Adjusted Metformin dosage to 1000mg.&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;raf_weight&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.104</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;audit_status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;PASS - CLAIMS READY&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p><strong>Scenario B: Failed MEAT Validation (Audit Prevented)</strong><br />
+<em>Clinical Note:</em> "PMH includes Type 2 Diabetes, hypertension, and asthma. Patient is here today for a sprained ankle."</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;entity&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Type 2 Diabetes&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;icd_10&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;E11.9&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;hcc_category&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Diabetes without Complication&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;meat_validated&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;meat_evidence&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;raf_weight&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.000</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;audit_status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;FAIL - HISTORY ONLY (Weight Zeroed)&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p><em>Notice how the agentic framework automatically zeroes the financial weight (0.000) to prevent downstream compliance risk, despite the ensemble successfully extracting the condition from the note.</em></p>
+<hr />
+<h2>Conclusion</h2>
+<p>By implementing a multi-agent framework that wraps the extraction ensemble, organizations can eliminate the noise generated by LLM hallucinations and automate Risk Adjustment coding with mathematical certainty. The inclusion of the MEAT validation sub-agent alone transforms a standard RWE pipeline into an audit-proof claims engine.</p></body></html>

@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/python-3.11-blue?logo=python&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-0.1-purple?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PC9zdmc+)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.35-FF4B4B?logo=streamlit&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-10%20passing-brightgreen?logo=pytest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-46%20passing-brightgreen?logo=pytest&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-active-success)
 
@@ -96,6 +96,21 @@ The incident triage workflow consists of autonomous nodes managed by LangGraph:
 5. **Notification Node**
    * Communicates outcomes
    * Triggers webhook alerts on drift events
+
+---
+
+## 🏥 Clinical RWE & HCC Coding Pipeline
+
+Beyond IT incidents, this project features a parallel **Clinical Data Extraction Pipeline** designed to overcome LLM hallucinations and Medicare RADV audit risks in Real-World Evidence (RWE) generation.
+
+### The Agentic Workflow
+1. **Bayesian Ensemble NER:** Combines LLMs, deterministic regex, and NLM APIs with Bayesian posterior probabilities to extract medical entities with high recall and precision.
+2. **Context Pre-Processor:** Identifies if conditions are negated or belong to family members to stop temporal and experiencer hallucinations.
+3. **Disambiguation & Ontology Router:** Maps validated entities to current ICD-10 codes and CMS Hierarchical Condition Categories (HCC).
+4. **MEAT Validation Sub-Agent (Audit-Proofing):** 
+   * A secondary deterministic agent ensures every extracted condition is backed by cryptographic proof of clinical action (**M**onitored, **E**valuated, **A**ssessed, **T**reated).
+   * If MEAT is verified, it outputs the exact text snippet and applies the CMS Risk Adjustment Factor (RAF) weight.
+   * If MEAT fails, it zeroes out the financial weight to **prevent RADV audit penalties**.
 
 ---
 
@@ -196,6 +211,11 @@ python run.py --no-alerts
 
 # Wipe the telemetry database and start fresh
 python run.py --clear
+```
+
+### 4.5 Run the Clinical Pipeline
+```bash
+python clinical/run_clinical.py
 ```
 
 ### 5. Launch the Streamlit dashboard
