@@ -208,6 +208,41 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    # ── Workflow selector ─────────────────────────────────────────────────────
+    st.markdown("### 🔬 Workflow")
+    workflow_mode = st.radio(
+        "Active Workflow",
+        options=["Incident Triage", "Clinical Coding"],
+        index=0,
+        label_visibility="collapsed",
+        horizontal=True,
+    )
+    IS_CLINICAL = workflow_mode == "Clinical Coding"
+
+    # ── Clinical file upload ──────────────────────────────────────────────────
+    uploaded_note: str | None = None
+    if IS_CLINICAL:
+        st.markdown("### 📄 Upload Clinical Note")
+        uploaded_file = st.file_uploader(
+            "Upload a .txt clinical note to code",
+            type=["txt"],
+            help="Plain-text clinical note. The agent will extract and map ICD-10 codes.",
+        )
+        if uploaded_file is not None:
+            uploaded_note = uploaded_file.read().decode("utf-8", errors="replace")
+            st.success(f"Loaded: **{uploaded_file.name}** ({len(uploaded_note)} chars)")
+            if st.button("▶ Run Clinical Coding", use_container_width=True, type="primary"):
+                with st.spinner("Running clinical coding agent…"):
+                    import subprocess, sys
+                    result = subprocess.run(
+                        [sys.executable, "-m", "clinical.run_clinical",
+                         "--note", uploaded_note, "--no-alerts"],
+                        capture_output=True, text=True,
+                    )
+                st.toast("✅ Coding complete! Refresh to see results.")
+                st.cache_data.clear()
+                st.rerun()
+
     # ── Tenant selector (PostgreSQL mode only) ────────────────────────────────
     if USE_POSTGRES:
         st.markdown("### 🏢 Tenant")
@@ -256,13 +291,23 @@ if auto_refresh:
 # ── Load & Filter ─────────────────────────────────────────────────────────────
 df_raw = load_data(selected_tenant)
 
+# Filter by workflow type if clinical mode is selected
+if not df_raw.empty and "workflow_type" in df_raw.columns:
+    workflow_type_filter = "clinical_coding" if IS_CLINICAL else "incident_triage"
+    df_raw = df_raw[df_raw["workflow_type"] == workflow_type_filter]
+
 if df_raw.empty:
     st.title("🧠 Agentic Drift Detector")
-    backend_hint = (
-        f"No data found for tenant **{selected_tenant}** in PostgreSQL."
-        if USE_POSTGRES else
-        "No telemetry data found. Run `python run.py --simulate-batch 50`."
-    )
+    if IS_CLINICAL:
+        backend_hint = (
+            "No clinical coding data found. Run:\n"
+            "```bash\npython -m clinical.run_clinical --simulate-batch 20\n```"
+            "\nor upload a clinical note using the sidebar."
+        )
+    elif USE_POSTGRES:
+        backend_hint = f"No data found for tenant **{selected_tenant}** in PostgreSQL."
+    else:
+        backend_hint = "No telemetry data found. Run `python run.py --simulate-batch 50`."
     st.warning(backend_hint)
     st.stop()
 
@@ -282,11 +327,15 @@ if total == 0:
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
     tenant_badge = f'<span class="tenant-badge">{selected_tenant}</span>' if USE_POSTGRES else ""
+    workflow_label = "⚕️ Clinical Coding" if IS_CLINICAL else "🧠 Incident Triage"
     st.markdown(
         f"<h1 style='color:#e6edf3;font-size:26px;margin-bottom:4px;font-weight:700;'>"
-        f"🧠 Agentic Drift Detector &nbsp;{tenant_badge}</h1>"
+        f"{workflow_label} Drift Detector &nbsp;{tenant_badge}</h1>"
         "<p style='color:#8b949e;font-size:14px;margin-top:0;'>"
-        "Real-time behavioral observability for autonomous AI agent workflows.</p>",
+        + ("ICD-10 clinical coding observability — behavioral safety for medical AI."
+           if IS_CLINICAL else
+           "Real-time behavioral observability for autonomous AI agent workflows.")
+        + "</p>",
         unsafe_allow_html=True,
     )
 with col_h2:
@@ -301,7 +350,6 @@ st.markdown("<hr style='margin:12px 0 24px;'>", unsafe_allow_html=True)
 # ── KPI Cards ─────────────────────────────────────────────────────────────────
 avg_drift   = df["drift_score"].mean()
 avg_latency = df["execution_time_ms"].mean() / 1000
-esc_rate    = (df["decision"] == "escalate").mean() * 100
 heal_count  = (
     df["path_taken"].str.contains("intervention", na=False).sum()
     if "path_taken" in df.columns else 0
@@ -312,8 +360,18 @@ c1, c2, c3, c4, c5, c6 = st.columns(6)
 metric_card(c1, "Total Runs",      f"{total:,}")
 metric_card(c2, "Avg Drift Score", f"{avg_drift:.1f}",  sub="0 = perfect")
 metric_card(c3, "Avg Latency",     f"{avg_latency:.2f}s")
-metric_card(c4, "Escalation Rate", f"{esc_rate:.1f}%")
-metric_card(c5, "Healing Events",  f"{heal_count:,}",   sub="intervention node")
+
+if IS_CLINICAL:
+    # Clinical-specific KPIs
+    avg_conf = df["overall_confidence"].mean() if "overall_confidence" in df.columns else 0
+    review_ct = (df["decision"] == "requires_clinical_review").sum() if "decision" in df.columns else 0
+    metric_card(c4, "Avg Confidence",  f"{avg_conf:.2f}",   sub="coding accuracy")
+    metric_card(c5, "Human Review",    f"{review_ct:,}",    sub="clinical_intervention")
+else:
+    esc_rate = (df["decision"] == "escalate").mean() * 100
+    metric_card(c4, "Escalation Rate", f"{esc_rate:.1f}%")
+    metric_card(c5, "Healing Events",  f"{heal_count:,}",   sub="intervention node")
+
 metric_card(c6, "High-Risk Runs",  f"{high_risk_ct:,}", sub="score ≥ 60")
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -434,6 +492,130 @@ st.dataframe(
         "risk_level":        st.column_config.TextColumn("Risk Level"),
     },
 )
+
+# ── Population Insights (Clinical Coding mode — Miimansa RWE pipeline) ────────
+if IS_CLINICAL:
+    st.markdown("---")
+    st.markdown(
+        "<div class='section-title'>🧬 Population Insights — Real World Evidence</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Aggregated statistics across all coded clinical records. "
+        "This is the foundation of Real World Evidence (RWE) generation — "
+        "mirroring Miimansa's 'Learning from Every Patient' pipeline."
+    )
+
+    pop_col1, pop_col2 = st.columns(2)
+
+    with pop_col1:
+        # Claims-ready rate gauge
+        if "decision" in df.columns:
+            complete_ct    = (df["decision"] == "complete").sum()
+            total_clinical = len(df)
+            claims_rate    = (complete_ct / total_clinical * 100) if total_clinical else 0
+
+            fig_gauge = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=claims_rate,
+                title={"text": "Claims-Ready Rate (%)", "font": {"color": "#e6edf3", "size": 14}},
+                number={"suffix": "%", "font": {"color": "#58a6ff", "size": 28}},
+                gauge={
+                    "axis":  {"range": [0, 100], "tickcolor": "#8b949e"},
+                    "bar":   {"color": "#3fb950"},
+                    "steps": [
+                        {"range": [0,  50], "color": "rgba(248,81,73,0.2)"},
+                        {"range": [50, 80], "color": "rgba(210,153,34,0.2)"},
+                        {"range": [80,100], "color": "rgba(63,185,80,0.2)"},
+                    ],
+                    "threshold": {"line": {"color": "#58a6ff", "width": 2}, "value": 85},
+                    "bgcolor": "#1c2230", "bordercolor": "#2d3348",
+                },
+            ))
+            fig_gauge.update_layout(
+                paper_bgcolor="#161b22", font_color="#e6edf3",
+                height=220, margin=dict(t=30, b=10, l=20, r=20),
+            )
+            st.plotly_chart(fig_gauge, use_container_width=True)
+
+        # Coding confidence trend over time
+        if "overall_confidence" in df.columns and "created_at" in df.columns:
+            df_trend = df[["created_at", "overall_confidence"]].dropna()
+            if not df_trend.empty:
+                df_trend["created_at"] = pd.to_datetime(df_trend["created_at"])
+                df_trend = df_trend.sort_values("created_at")
+                df_trend["rolling_conf"] = df_trend["overall_confidence"].rolling(5, min_periods=1).mean()
+                fig_trend = px.line(
+                    df_trend, x="created_at", y="rolling_conf",
+                    title="Coding Confidence Over Time (5-run rolling avg)",
+                    labels={"created_at": "", "rolling_conf": "Confidence"},
+                    color_discrete_sequence=["#58a6ff"],
+                )
+                fig_trend.update_layout(
+                    paper_bgcolor="#161b22", plot_bgcolor="#0d1117",
+                    font_color="#e6edf3", title_font_size=13,
+                    height=220, margin=dict(t=40, b=20, l=20, r=20),
+                    yaxis=dict(range=[0, 1], gridcolor="#2d3348"),
+                    xaxis=dict(gridcolor="#2d3348"),
+                )
+                fig_trend.add_hline(y=0.85, line_dash="dot", line_color="#3fb950",
+                                    annotation_text="Claims-ready threshold")
+                st.plotly_chart(fig_trend, use_container_width=True)
+
+    with pop_col2:
+        # Risk level distribution bar chart
+        if "risk_level" in df.columns and "drift_score" in df.columns:
+            risk_counts = df["risk_level"].value_counts().reset_index()
+            risk_counts.columns = ["Risk Level", "Count"]
+            color_map = {
+                "healthy":        "#3fb950",
+                "low_drift":      "#58a6ff",
+                "moderate_drift": "#d29922",
+                "high_risk":      "#f85149",
+            }
+            fig_risk = px.bar(
+                risk_counts, x="Risk Level", y="Count",
+                title="Risk Level Distribution",
+                color="Risk Level", color_discrete_map=color_map,
+            )
+            fig_risk.update_layout(
+                paper_bgcolor="#161b22", plot_bgcolor="#0d1117",
+                font_color="#e6edf3", title_font_size=13, showlegend=False,
+                height=220, margin=dict(t=40, b=20, l=20, r=20),
+                yaxis=dict(gridcolor="#2d3348"), xaxis=dict(gridcolor="#2d3348"),
+            )
+            st.plotly_chart(fig_risk, use_container_width=True)
+
+        # Population summary card
+        if "overall_confidence" in df.columns:
+            avg_conf = df["overall_confidence"].dropna().mean()
+            std_conf = df["overall_confidence"].dropna().std()
+            n_runs   = len(df)
+            n_review = (df["decision"] == "requires_clinical_review").sum() if "decision" in df.columns else 0
+            st.markdown(
+                f"""
+                <div style="background:#1c2230;border:1px solid #2d3348;border-radius:8px;
+                            padding:16px;font-size:13px;color:#e6edf3;margin-top:8px;">
+                  <div style="font-weight:700;color:#58a6ff;margin-bottom:8px;">📊 Population Summary</div>
+                  <table style="width:100%;border-collapse:collapse;">
+                    <tr><td style="color:#8b949e;padding:3px 0;">Total coded records</td>
+                        <td style="text-align:right;font-weight:600;">{n_runs:,}</td></tr>
+                    <tr><td style="color:#8b949e;padding:3px 0;">Avg coding confidence</td>
+                        <td style="text-align:right;font-weight:600;">{avg_conf:.3f} ± {std_conf:.3f}</td></tr>
+                    <tr><td style="color:#8b949e;padding:3px 0;">Sent to human review</td>
+                        <td style="text-align:right;font-weight:600;color:#f85149;">{n_review:,}</td></tr>
+                    <tr><td style="color:#8b949e;padding:3px 0;">Human review rate</td>
+                        <td style="text-align:right;font-weight:600;">{(n_review/n_runs*100):.1f}%</td></tr>
+                  </table>
+                  <div style="margin-top:12px;font-size:11px;color:#3d444d;
+                              border-top:1px solid #2d3348;padding-top:8px;">
+                    ⚕️ Adaptive baseline updates with each run — the more records coded,
+                    the tighter the drift detection becomes.
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 backend_label = "PostgreSQL + TimescaleDB" if USE_POSTGRES else "SQLite"

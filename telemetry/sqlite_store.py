@@ -31,22 +31,26 @@ _CREATE_TABLE = """
         execution_time_ms INTEGER,
         drift_score       INTEGER DEFAULT 0,
         risk_level        TEXT    DEFAULT 'healthy',
+        workflow_type     TEXT    DEFAULT 'incident_triage',
+        overall_confidence REAL   DEFAULT NULL,
         created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
     )
 """
 
 _MIGRATIONS = [
-    ("drift_score", "INTEGER DEFAULT 0"),
-    ("risk_level",  "TEXT DEFAULT 'healthy'"),
-    ("created_at",  "DATETIME DEFAULT CURRENT_TIMESTAMP"),
+    ("drift_score",       "INTEGER DEFAULT 0"),
+    ("risk_level",        "TEXT DEFAULT 'healthy'"),
+    ("created_at",        "DATETIME DEFAULT CURRENT_TIMESTAMP"),
+    ("workflow_type",     "TEXT DEFAULT 'incident_triage'"),
+    ("overall_confidence", "REAL DEFAULT NULL"),
 ]
 
 _INSERT = """
     INSERT INTO executions (
         incident_id, severity, decision, confidence,
         step_count, retry_count, path_taken, execution_time_ms,
-        drift_score, risk_level
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        drift_score, risk_level, workflow_type, overall_confidence
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 _BASELINE_QUERY = """
@@ -58,9 +62,11 @@ _BASELINE_QUERY = """
         AVG(CASE WHEN severity = 'high'     THEN 1.0 ELSE 0.0 END) AS high_severity_rate,
         AVG(CASE WHEN severity = 'low'
                  THEN CASE WHEN decision = 'escalate' THEN 1.0 ELSE 0.0 END
-                 ELSE NULL END) AS low_severity_escalation_rate
+                 ELSE NULL END) AS low_severity_escalation_rate,
+        AVG(overall_confidence) AS avg_coding_confidence
     FROM (
-        SELECT step_count, retry_count, execution_time_ms, decision, severity
+        SELECT step_count, retry_count, execution_time_ms, decision, severity,
+               overall_confidence
         FROM executions
         ORDER BY id DESC
         LIMIT ?
@@ -68,12 +74,14 @@ _BASELINE_QUERY = """
 """
 
 _DEFAULT_BASELINE = {
-    "avg_steps": 4.0,
-    "avg_retries": 0.0,
-    "avg_latency": 100.0,
-    "escalation_rate": 0.2,
-    "high_severity_rate": 0.2,
+    "avg_steps":                   4.0,
+    "avg_retries":                 0.0,
+    "avg_latency":                 100.0,
+    "escalation_rate":             0.2,
+    "high_severity_rate":          0.2,
     "low_severity_escalation_rate": 0.05,
+    "avg_coding_confidence":       0.75,
+    "avg_unresolved_rate":         0.05,
 }
 
 
@@ -93,28 +101,32 @@ def init_db() -> None:
 
 
 def save_execution_state(
-    state: IncidentState,
+    state,
     analysis: dict | None = None,
     *,
     tenant_id: str | None = None,  # accepted but ignored in SQLite mode
 ) -> None:
     """Persist a completed workflow execution to SQLite."""
+    # Support both incident_triage states (incident_id) and clinical states (record_id)
+    record_key = state.get("incident_id") or state.get("record_id")
     values = (
-        state.get("incident_id"),
+        record_key,
         state.get("severity"),
-        state.get("decision"),
-        state.get("confidence"),
+        state.get("decision") or state.get("coding_status"),
+        state.get("confidence") or state.get("overall_confidence"),
         state.get("step_count", 0),
         state.get("retry_count", 0),
         json.dumps(state.get("path_taken", [])),
         state.get("execution_time_ms", 0),
         analysis.get("drift_score", 0) if analysis else 0,
         analysis.get("risk_level", "healthy") if analysis else "healthy",
+        analysis.get("workflow_type", "incident_triage") if analysis else "incident_triage",
+        state.get("overall_confidence"),
     )
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(_INSERT, values)
         conn.commit()
-    log.debug("SQLite: saved execution %s", state.get("incident_id"))
+    log.debug("SQLite: saved execution %s", record_key)
 
 
 def get_historical_metrics(
@@ -138,4 +150,6 @@ def get_historical_metrics(
         "escalation_rate":              row["escalation_rate"]              or 0.2,
         "high_severity_rate":           row["high_severity_rate"]           or 0.2,
         "low_severity_escalation_rate": row["low_severity_escalation_rate"] or 0.05,
+        "avg_coding_confidence":        row["avg_coding_confidence"]        or 0.75,
+        "avg_unresolved_rate":          0.05,  # computed separately if needed
     }

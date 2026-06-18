@@ -3,6 +3,9 @@ from telemetry.store import get_historical_metrics
 # -------------------------
 # 1. DRIFT SIGNAL FUNCTIONS
 # -------------------------
+# Signals are grouped into two categories:
+#   a) Generic workflow signals (used by incident_triage)
+#   b) Clinical-specific signals (used by clinical_coding)
 
 def step_count_drift(state, baseline):
     max_steps = max(5, baseline["avg_steps"] + 1)
@@ -94,20 +97,84 @@ def classification_bias(state, baseline):
     return 0
 
 
+# ── Clinical-Specific Drift Signals ──────────────────────────────────────────
+
+def coding_confidence_drift(state, baseline):
+    """
+    Fires when the agent's overall_confidence drops significantly below the
+    historical average — a strong hallucination or ambiguity signal.
+    """
+    confidence = state.get("overall_confidence")
+    if confidence is None:
+        return 0  # Not a clinical run
+
+    avg_confidence = baseline.get("avg_coding_confidence", 0.75)
+    if confidence >= avg_confidence * 0.85:
+        return 0  # Within 15% of baseline — healthy
+    elif confidence >= avg_confidence * 0.65:
+        return 20  # Moderate drop
+    else:
+        return 35  # Severe confidence collapse
+
+
+def unresolved_entity_drift(state, baseline):
+    """
+    Fires when the proportion of unresolved medical terms (no ICD-10 match)
+    exceeds the historical baseline. Signals ambiguous notes or model drift.
+    """
+    codes = state.get("icd10_codes") or []
+    if not codes:
+        return 0
+
+    unresolved_count = sum(1 for c in codes if c.get("code") == "UNRESOLVED")
+    unresolved_rate = unresolved_count / len(codes)
+
+    historical_rate = baseline.get("avg_unresolved_rate", 0.05)
+    if unresolved_rate <= historical_rate * 1.5:
+        return 0
+    elif unresolved_rate <= 0.3:
+        return 15  # Some unresolvable terms
+    else:
+        return 30  # High unresolved rate — note quality or model drift
+
+
+def clinical_api_retry_drift(state, baseline):
+    """
+    Fires when NLM API retries (reflected in retry_count) exceed the baseline.
+    High retries indicate fragile ontology resolution.
+    """
+    retries = state.get("retry_count", 0)
+    avg_retries = baseline.get("avg_retries", 0.0)
+    max_allowed = max(1, avg_retries + 0.5)
+
+    if retries <= max_allowed:
+        return 0
+    return min(20, int((retries - max_allowed) * 10))
+
+
 # -------------------------
 # 2. DRIFT SCORE AGGREGATOR
 # -------------------------
 
-def calculate_drift_score(state, baseline):
+def calculate_drift_score(state, baseline, workflow_type: str = "incident_triage"):
     score = 0
 
+    # Generic signals — applied to all workflows
     score += step_count_drift(state, baseline)
     score += retry_drift(state, baseline)
     score += path_drift(state)
     score += decision_loop_drift(state)
     score += latency_drift(state, baseline)
-    score += escalation_bias(state, baseline)
-    score += classification_bias(state, baseline)
+
+    if workflow_type == "clinical_coding":
+        # Clinical-specific signals replace incident-triage semantic signals
+        score += coding_confidence_drift(state, baseline)
+        score += unresolved_entity_drift(state, baseline)
+        score += clinical_api_retry_drift(state, baseline)
+    else:
+        # Incident-triage semantic signals
+        score += escalation_bias(state, baseline)
+        score += classification_bias(state, baseline)
 
     return score
 
@@ -127,13 +194,22 @@ def classify_risk(score):
 # 4. PUBLIC ENTRY POINT
 # -------------------------
 
-def analyze_workflow(state):
+def analyze_workflow(state, workflow_type: str = "incident_triage"):
+    """
+    Analyze a completed workflow state and return a drift analysis dict.
+
+    Args:
+        state:         The final LangGraph state dict.
+        workflow_type: "incident_triage" (default) or "clinical_coding".
+                       Controls which semantic drift signals are applied.
+    """
     baseline = get_historical_metrics()
-    score = calculate_drift_score(state, baseline)
+    score = calculate_drift_score(state, baseline, workflow_type=workflow_type)
     risk = classify_risk(score)
 
     return {
-        "drift_score": score,
-        "risk_level": risk,
-        "baseline_used": baseline
+        "drift_score":    score,
+        "risk_level":     risk,
+        "workflow_type":  workflow_type,
+        "baseline_used":  baseline,
     }
