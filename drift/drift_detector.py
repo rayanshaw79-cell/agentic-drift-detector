@@ -1,6 +1,8 @@
 from telemetry.store import get_historical_metrics
+from drift.ml_detector import DriftModel
 
-# -------------------------
+# Global ML model instance (loads from disk if trained)
+ml_model = DriftModel()# -------------------------
 # 1. DRIFT SIGNAL FUNCTIONS
 # -------------------------
 # Signals are grouped into two categories:
@@ -157,24 +159,25 @@ def clinical_api_retry_drift(state, baseline):
 # -------------------------
 
 def calculate_drift_score(state, baseline, workflow_type: str = "incident_triage"):
-    score = 0
-
-    # Generic signals — applied to all workflows
-    score += step_count_drift(state, baseline)
-    score += retry_drift(state, baseline)
-    score += path_drift(state)
-    score += decision_loop_drift(state)
-    score += latency_drift(state, baseline)
+    # 1. Base score from ML Model (Anomaly Detection)
+    ml_score, _ = ml_model.predict(state)
+    score = ml_score
 
     if workflow_type == "clinical_coding":
-        # Clinical-specific signals replace incident-triage semantic signals
+        # Clinical-specific signals are deterministic and replace incident-triage semantic signals
         score += coding_confidence_drift(state, baseline)
         score += unresolved_entity_drift(state, baseline)
         score += clinical_api_retry_drift(state, baseline)
     else:
-        # Incident-triage semantic signals
-        score += escalation_bias(state, baseline)
-        score += classification_bias(state, baseline)
+        # If ML model is untrained or didn't detect anything, fallback to rule-based heuristics
+        if score == 0:
+            score += step_count_drift(state, baseline)
+            score += retry_drift(state, baseline)
+            score += path_drift(state)
+            score += decision_loop_drift(state)
+            score += latency_drift(state, baseline)
+            score += escalation_bias(state, baseline)
+            score += classification_bias(state, baseline)
 
     return score
 
