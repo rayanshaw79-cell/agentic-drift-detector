@@ -43,14 +43,18 @@ _MIGRATIONS = [
     ("created_at",        "DATETIME DEFAULT CURRENT_TIMESTAMP"),
     ("workflow_type",     "TEXT DEFAULT 'incident_triage'"),
     ("overall_confidence", "REAL DEFAULT NULL"),
+    ("unresolved_count",   "INTEGER DEFAULT 0"),
+    ("total_entities",     "INTEGER DEFAULT 0"),
+    ("ml_explanation",     "TEXT DEFAULT NULL"),
 ]
 
 _INSERT = """
     INSERT INTO executions (
         incident_id, severity, decision, confidence,
         step_count, retry_count, path_taken, execution_time_ms,
-        drift_score, risk_level, workflow_type, overall_confidence
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        drift_score, risk_level, workflow_type, overall_confidence,
+        unresolved_count, total_entities, ml_explanation
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 _BASELINE_QUERY = """
@@ -63,10 +67,11 @@ _BASELINE_QUERY = """
         AVG(CASE WHEN severity = 'low'
                  THEN CASE WHEN decision = 'escalate' THEN 1.0 ELSE 0.0 END
                  ELSE NULL END) AS low_severity_escalation_rate,
-        AVG(overall_confidence) AS avg_coding_confidence
+        AVG(overall_confidence) AS avg_coding_confidence,
+        SUM(unresolved_count)*1.0 / NULLIF(SUM(total_entities), 0) AS avg_unresolved_rate
     FROM (
         SELECT step_count, retry_count, execution_time_ms, decision, severity,
-               overall_confidence
+               overall_confidence, unresolved_count, total_entities
         FROM executions
         ORDER BY id DESC
         LIMIT ?
@@ -109,6 +114,10 @@ def save_execution_state(
     """Persist a completed workflow execution to SQLite."""
     # Support both incident_triage states (incident_id) and clinical states (record_id)
     record_key = state.get("incident_id") or state.get("record_id")
+    icd10_codes = state.get("icd10_codes", [])
+    unresolved_count = sum(1 for c in icd10_codes if c.get("code") == "UNRESOLVED") if icd10_codes else 0
+    total_entities = len(icd10_codes) if icd10_codes else 0
+
     values = (
         record_key,
         state.get("severity"),
@@ -122,6 +131,9 @@ def save_execution_state(
         analysis.get("risk_level", "healthy") if analysis else "healthy",
         analysis.get("workflow_type", "incident_triage") if analysis else "incident_triage",
         state.get("overall_confidence"),
+        unresolved_count,
+        total_entities,
+        analysis.get("ml_explanation") if analysis else None,
     )
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(_INSERT, values)
@@ -151,5 +163,5 @@ def get_historical_metrics(
         "high_severity_rate":           row["high_severity_rate"]           or 0.2,
         "low_severity_escalation_rate": row["low_severity_escalation_rate"] or 0.05,
         "avg_coding_confidence":        row["avg_coding_confidence"]        or 0.75,
-        "avg_unresolved_rate":          0.05,  # computed separately if needed
+        "avg_unresolved_rate":          row["avg_unresolved_rate"]          or 0.05,
     }

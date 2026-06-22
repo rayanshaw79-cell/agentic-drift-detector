@@ -10,9 +10,10 @@ def test_ml_drift_detector_healthy():
         "decision": "auto_resolve"
     }
     baseline = {}
-    score = calculate_drift_score(state, baseline)
+    score, ml_explanation = calculate_drift_score(state, baseline)
     # Healthy states should have a low anomaly score
     assert score < 30
+    assert ml_explanation is None
 
 def test_ml_drift_detector_anomalous():
     state = {
@@ -23,6 +24,8 @@ def test_ml_drift_detector_anomalous():
         "decision": "auto_resolve" # Anomalous decision for high severity
     }
     baseline = {}
-    score = calculate_drift_score(state, baseline)
+    score, ml_explanation = calculate_drift_score(state, baseline)
     # Extremely anomalous states should be flagged as drift or high risk
     assert score >= 60
+    assert ml_explanation is not None
+    assert "Anomaly driven by" in ml_explanation

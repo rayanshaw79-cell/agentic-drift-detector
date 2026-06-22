@@ -65,11 +65,13 @@ _INSERT = """
     INSERT INTO executions (
         tenant_id, incident_id, severity, decision, confidence,
         step_count, retry_count, path_taken, execution_time_ms,
-        drift_score, risk_level
+        drift_score, risk_level, workflow_type, overall_confidence,
+        unresolved_count, total_entities, ml_explanation
     ) VALUES (
         %(tenant_id)s, %(incident_id)s, %(severity)s, %(decision)s, %(confidence)s,
         %(step_count)s, %(retry_count)s, %(path_taken)s, %(execution_time_ms)s,
-        %(drift_score)s, %(risk_level)s
+        %(drift_score)s, %(risk_level)s, %(workflow_type)s, %(overall_confidence)s,
+        %(unresolved_count)s, %(total_entities)s, %(ml_explanation)s
     )
 """
 
@@ -82,9 +84,12 @@ _BASELINE_QUERY = """
         AVG(CASE WHEN severity = 'high'     THEN 1.0 ELSE 0.0 END) AS high_severity_rate,
         AVG(CASE WHEN severity = 'low'
                  THEN CASE WHEN decision = 'escalate' THEN 1.0 ELSE 0.0 END
-                 ELSE NULL END) AS low_severity_escalation_rate
+                 ELSE NULL END) AS low_severity_escalation_rate,
+        AVG(overall_confidence) AS avg_coding_confidence,
+        SUM(unresolved_count)::FLOAT / NULLIF(SUM(total_entities), 0) AS avg_unresolved_rate
     FROM (
-        SELECT step_count, retry_count, execution_time_ms, decision, severity
+        SELECT step_count, retry_count, execution_time_ms, decision, severity,
+               overall_confidence, unresolved_count, total_entities
         FROM executions
         WHERE tenant_id = %(tenant_id)s
         ORDER BY created_at DESC
@@ -112,26 +117,28 @@ def init_db() -> None:
     - Attempts TimescaleDB hypertable creation (graceful fallback to plain PG).
     - Safe to call repeatedly (idempotent).
     """
-    migration_path = Path(__file__).parent.parent / "migrations" / "001_initial_postgres.sql"
-    sql = migration_path.read_text(encoding="utf-8")
+    migrations_dir = Path(__file__).parent.parent / "migrations"
+    migration_files = sorted(migrations_dir.glob("*.sql"))
 
     with _get_conn() as conn:
         with conn.cursor() as cur:
-            # Run each statement individually to isolate TimescaleDB failures
-            for statement in _split_sql(sql):
-                try:
-                    cur.execute(statement)
-                    conn.commit()
-                except psycopg2.Error as exc:
-                    conn.rollback()
-                    if "timescaledb" in str(exc).lower() or "create_hypertable" in statement.lower():
-                        log.warning(
-                            "TimescaleDB not available (%s). "
-                            "Continuing with plain PostgreSQL — time-series features disabled.",
-                            exc.pgcode,
-                        )
-                    else:
-                        raise
+            for migration_path in migration_files:
+                sql = migration_path.read_text(encoding="utf-8")
+                # Run each statement individually to isolate TimescaleDB failures
+                for statement in _split_sql(sql):
+                    try:
+                        cur.execute(statement)
+                        conn.commit()
+                    except psycopg2.Error as exc:
+                        conn.rollback()
+                        if "timescaledb" in str(exc).lower() or "create_hypertable" in statement.lower():
+                            log.warning(
+                                "TimescaleDB not available (%s). "
+                                "Continuing with plain PostgreSQL — time-series features disabled.",
+                                exc.pgcode,
+                            )
+                        else:
+                            raise
 
     log.info("PostgreSQL schema initialised.")
 
@@ -146,13 +153,17 @@ def save_execution_state(
     from config.tenant import ensure_tenant_exists
 
     path_taken = state.get("path_taken", [])
+    
+    icd10_codes = state.get("icd10_codes", [])
+    unresolved_count = sum(1 for c in icd10_codes if c.get("code") == "UNRESOLVED") if icd10_codes else 0
+    total_entities = len(icd10_codes) if icd10_codes else 0
 
     params = {
         "tenant_id":         tenant_id,
-        "incident_id":       state.get("incident_id"),
+        "incident_id":       state.get("incident_id") or state.get("record_id"),
         "severity":          state.get("severity"),
-        "decision":          state.get("decision"),
-        "confidence":        state.get("confidence"),
+        "decision":          state.get("decision") or state.get("coding_status"),
+        "confidence":        state.get("confidence") or state.get("overall_confidence"),
         "step_count":        state.get("step_count", 0),
         "retry_count":       state.get("retry_count", 0),
         "path_taken":        Json(path_taken if isinstance(path_taken, list)
@@ -160,6 +171,11 @@ def save_execution_state(
         "execution_time_ms": state.get("execution_time_ms", 0),
         "drift_score":       analysis.get("drift_score", 0) if analysis else 0,
         "risk_level":        analysis.get("risk_level", "healthy") if analysis else "healthy",
+        "workflow_type":     analysis.get("workflow_type", "incident_triage") if analysis else "incident_triage",
+        "overall_confidence":state.get("overall_confidence"),
+        "unresolved_count":  unresolved_count,
+        "total_entities":    total_entities,
+        "ml_explanation":    analysis.get("ml_explanation") if analysis else None,
     }
 
     with _get_conn() as conn:
@@ -196,6 +212,8 @@ def get_historical_metrics(
         "escalation_rate":              float(row["escalation_rate"]              or 0.2),
         "high_severity_rate":           float(row["high_severity_rate"]           or 0.2),
         "low_severity_escalation_rate": float(row["low_severity_escalation_rate"] or 0.05),
+        "avg_coding_confidence":        float(row["avg_coding_confidence"]        or 0.75),
+        "avg_unresolved_rate":          float(row["avg_unresolved_rate"]          or 0.05),
     }
 
 

@@ -160,7 +160,7 @@ def clinical_api_retry_drift(state, baseline):
 
 def calculate_drift_score(state, baseline, workflow_type: str = "incident_triage"):
     # 1. Base score from ML Model (Anomaly Detection)
-    ml_score, _ = ml_model.predict(state)
+    ml_score, ml_risk, ml_explanation = ml_model.predict(state)
     score = ml_score
 
     if workflow_type == "clinical_coding":
@@ -179,7 +179,7 @@ def calculate_drift_score(state, baseline, workflow_type: str = "incident_triage
             score += escalation_bias(state, baseline)
             score += classification_bias(state, baseline)
 
-    return score
+    return score, ml_explanation
 
 # -------------------------
 # 3. RISK CLASSIFICATION
@@ -207,7 +207,7 @@ def analyze_workflow(state, workflow_type: str = "incident_triage"):
                        Controls which semantic drift signals are applied.
     """
     baseline = get_historical_metrics()
-    score = calculate_drift_score(state, baseline, workflow_type=workflow_type)
+    score, ml_explanation = calculate_drift_score(state, baseline, workflow_type=workflow_type)
     risk = classify_risk(score)
 
     return {
@@ -215,4 +215,5 @@ def analyze_workflow(state, workflow_type: str = "incident_triage"):
         "risk_level":     risk,
         "workflow_type":  workflow_type,
         "baseline_used":  baseline,
+        "ml_explanation": ml_explanation,
     }

@@ -21,6 +21,15 @@ def synthesize_healthy_data(num_records=500):
             "severity": random.choices(["low", "medium", "high"], weights=[0.6, 0.3, 0.1])[0]
         }
         
+        # Synthesize healthy paths
+        if state["step_count"] == 3:
+            state["path_taken"] = ["triage", "investigation", "decision"]
+        else:
+            state["path_taken"] = ["triage", "investigation", "decision", "notification"]
+            
+        if state["retry_count"] > 0:
+            state["path_taken"].insert(2, "investigation") # simulate a loop
+            
         # Healthy decision logic
         if state["severity"] == "high":
             state["decision"] = "escalate"
