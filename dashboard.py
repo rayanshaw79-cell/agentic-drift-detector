@@ -625,6 +625,196 @@ if IS_CLINICAL:
                 unsafe_allow_html=True,
             )
 
+# ── SDOH Risk Trajectories Section ───────────────────────────────────────────
+st.markdown("---")
+st.markdown(
+    "<div class='section-title'>🧬 SDOH Longitudinal Risk Trajectories</div>",
+    unsafe_allow_html=True,
+)
+st.caption(
+    "Social Determinants of Health (SDOH) risk trajectory model — "
+    "tracks patient risk across visits using lifestyle, demographic, and environmental signals."
+)
+
+# Load SDOH patient store
+_sdoh_patients: list[str] = []
+_sdoh_all_visits_df: "pd.DataFrame | None" = None
+try:
+    import sys, os as _os
+    _sdoh_db = _os.path.join(_os.path.dirname(__file__), "sdoh_patients.db")
+    if _os.path.exists(_sdoh_db):
+        from clinical.sdoh.patient_store import get_all_patient_ids, get_all_visits
+        _sdoh_patients = get_all_patient_ids()
+        _sdoh_all_visits_df = pd.DataFrame(get_all_visits())
+except Exception as _e:
+    st.info(f"SDOH store not yet initialised. Run: `python -m clinical.sdoh.train_risk_model`")
+
+if _sdoh_patients:
+    sdoh_col_left, sdoh_col_right = st.columns([1, 3])
+
+    with sdoh_col_left:
+        selected_patient = st.selectbox(
+            "Select Patient", _sdoh_patients, key="sdoh_patient_selector"
+        )
+
+    # Load selected patient's history
+    try:
+        from clinical.sdoh.patient_store import get_patient_history
+        patient_visits = get_patient_history(selected_patient)
+    except Exception:
+        patient_visits = []
+
+    if patient_visits:
+        latest = patient_visits[-1]
+
+        # ── Patient KPI cards ────────────────────────────────────────────────
+        pk1, pk2, pk3, pk4, pk5 = st.columns(5)
+        pk1.metric("Total Visits", len(patient_visits))
+        pk2.metric("Age", latest.get("age", "N/A"))
+        pk3.metric("ZIP Code", latest.get("zip_code", "N/A"))
+        pk4.metric("HCC Score", f"{latest.get('hcc_score', 0):.2f}")
+        pk5.metric("Latest Risk", latest.get("sdoh_risk_label", "N/A").upper())
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        chart_col, factor_col = st.columns([3, 2])
+
+        with chart_col:
+            st.markdown(
+                "<div class='section-title'>📈 Risk Trajectory Over Visits</div>",
+                unsafe_allow_html=True,
+            )
+            risk_df = pd.DataFrame({
+                "Visit": [v["visit_number"] for v in patient_visits],
+                "Risk Score": [v.get("sdoh_risk_score", 0) for v in patient_visits],
+                "Risk Label": [v.get("sdoh_risk_label", "low") for v in patient_visits],
+            })
+
+            fig_traj = go.Figure()
+            fig_traj.add_trace(go.Scatter(
+                x=risk_df["Visit"], y=risk_df["Risk Score"],
+                mode="lines+markers",
+                name="SDOH Risk",
+                line=dict(color=COLORS["blue"], width=2.5),
+                fill="tozeroy", fillcolor="rgba(88,166,255,0.06)",
+                hovertemplate="Visit %{x}<br>Risk: %{y:.3f}<extra></extra>",
+            ))
+            fig_traj.add_hline(
+                y=0.6, line_dash="dot", line_color=COLORS["red"],
+                annotation_text="High Risk Threshold",
+                annotation_font_color=COLORS["red"],
+            )
+            fig_traj.add_hline(
+                y=0.30, line_dash="dot", line_color=COLORS["yellow"],
+                annotation_text="Moderate Threshold",
+                annotation_font_color=COLORS["yellow"],
+            )
+            fig_traj.update_layout(**PLOTLY_LAYOUT, height=280, showlegend=False)
+            st.plotly_chart(fig_traj, use_container_width=True, config={"displayModeBar": False})
+
+        with factor_col:
+            st.markdown(
+                "<div class='section-title'>⚠️ Risk Factor Profile</div>",
+                unsafe_allow_html=True,
+            )
+            factors = {
+                "Poverty Rate": latest.get("env_poverty_rate", 0),
+                "Air Quality (AQI/200)": latest.get("env_aqi", 0) / 200,
+                "Food Risk": latest.get("food_risk_score", 0),
+                "Smoking": float(latest.get("smoking_flag", 0)),
+                "Alcohol": float(latest.get("alcohol_flag", 0)),
+                "Low Exercise": 1 - latest.get("exercise_score", 0.5),
+            }
+            factor_df = pd.DataFrame({
+                "Factor": list(factors.keys()),
+                "Score":  list(factors.values()),
+            }).sort_values("Score", ascending=True)
+
+            fig_factors = px.bar(
+                factor_df, x="Score", y="Factor", orientation="h",
+                color="Score",
+                color_continuous_scale=[[0, COLORS["green"]], [0.5, COLORS["yellow"]], [1, COLORS["red"]]],
+            )
+            fig_factors.update_layout(**PLOTLY_LAYOUT, height=280, showlegend=False,
+                                      coloraxis_showscale=False)
+            st.plotly_chart(fig_factors, use_container_width=True, config={"displayModeBar": False})
+
+        # ── Intervention Alert ───────────────────────────────────────────────
+        risk_score = latest.get("sdoh_risk_score", 0)
+        risk_label = latest.get("sdoh_risk_label", "low")
+        if risk_label in ("high", "critical"):
+            st.markdown(
+                f"<div class='alert-item'>"
+                f"<div class='alert-id'>🔴 Preventive Intervention Recommended — {selected_patient}</div>"
+                f"<div class='alert-meta'>Current risk label: <b>{risk_label.upper()}</b> "
+                f"&nbsp;·&nbsp; Risk Score: <b>{risk_score:.3f}</b> "
+                f"&nbsp;·&nbsp; ICD-10: <code>{latest.get('icd10_codes', 'N/A')}</code>"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
+
+    # ── Population Risk Distribution ─────────────────────────────────────────
+    if _sdoh_all_visits_df is not None and not _sdoh_all_visits_df.empty:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='section-title'>🌍 Population Risk Distribution (All Patients)</div>",
+            unsafe_allow_html=True,
+        )
+        pop_col1, pop_col2 = st.columns(2)
+
+        with pop_col1:
+            # Latest visit per patient only
+            latest_per_patient = (
+                _sdoh_all_visits_df
+                .sort_values("visit_number")
+                .groupby("patient_id")
+                .last()
+                .reset_index()
+            )
+            label_counts = latest_per_patient["sdoh_risk_label"].value_counts().reset_index()
+            label_counts.columns = ["Risk Label", "Count"]
+            color_map = {
+                "low": COLORS["green"], "moderate": COLORS["yellow"],
+                "high": COLORS["red"], "critical": "#ff0000",
+            }
+            fig_pie = px.pie(
+                label_counts, names="Risk Label", values="Count",
+                color="Risk Label", color_discrete_map=color_map,
+                title="Current Risk Label Distribution",
+            )
+            fig_pie.update_layout(
+                paper_bgcolor="#161b22", font_color="#e6edf3",
+                title_font_size=13, height=280,
+                margin=dict(t=40, b=10, l=10, r=10),
+            )
+            st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
+
+        with pop_col2:
+            # Average HCC score by ZIP code
+            hcc_by_zip = (
+                _sdoh_all_visits_df
+                .groupby("zip_code")["hcc_score"]
+                .mean()
+                .reset_index()
+                .sort_values("hcc_score", ascending=False)
+            )
+            fig_hcc = px.bar(
+                hcc_by_zip, x="zip_code", y="hcc_score",
+                title="Avg HCC Risk Score by ZIP Code",
+                labels={"zip_code": "ZIP Code", "hcc_score": "Avg HCC Score"},
+                color="hcc_score",
+                color_continuous_scale=[[0, COLORS["green"]], [0.5, COLORS["yellow"]], [1, COLORS["red"]]],
+            )
+            fig_hcc.update_layout(
+                paper_bgcolor="#161b22", plot_bgcolor="#0d1117",
+                font_color="#e6edf3", title_font_size=13,
+                height=280, margin=dict(t=40, b=20, l=20, r=20),
+                yaxis=dict(gridcolor="#2d3348"),
+                xaxis=dict(gridcolor="#2d3348"),
+                coloraxis_showscale=False,
+            )
+            st.plotly_chart(fig_hcc, use_container_width=True, config={"displayModeBar": False})
+
 # ── Footer ────────────────────────────────────────────────────────────────────
 backend_label = "PostgreSQL + TimescaleDB" if USE_POSTGRES else "SQLite"
 st.markdown(
