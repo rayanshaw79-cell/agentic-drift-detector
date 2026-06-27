@@ -143,7 +143,7 @@ def _load_postgres(tenant_id: str) -> pd.DataFrame:
                 """
                 SELECT incident_id, severity, decision, confidence, step_count,
                        retry_count, path_taken, execution_time_ms,
-                       drift_score, risk_level, created_at
+                       drift_score, risk_level, created_at, ml_explanation
                 FROM executions
                 WHERE tenant_id = %s
                 ORDER BY created_at DESC
@@ -453,9 +453,9 @@ if "risk_level" in df.columns:
             f"<div class='metric-sub'>{row['Percentage']}</div></div>",
             unsafe_allow_html=True)
 
-# ── Alert Feed ────────────────────────────────────────────────────────────────
-st.markdown("<div class='section-title'>🚨 Recent Alerts</div>", unsafe_allow_html=True)
-alert_df = (df_raw[df_raw["risk_level"].isin(["high_risk", "drift_detected"])].head(5)
+# ── Alert Feed & Explainable AI ────────────────────────────────────────────────
+st.markdown("<div class='section-title'>🚨 Recent Alerts & Explainable AI</div>", unsafe_allow_html=True)
+alert_df = (df_raw[df_raw["risk_level"].isin(["high_risk", "drift_detected", "high", "critical"])].head(5)
             if "risk_level" in df_raw.columns else pd.DataFrame())
 if alert_df.empty:
     st.markdown(
@@ -464,8 +464,14 @@ if alert_df.empty:
         "✅ No active alerts — all executions are healthy.</div>", unsafe_allow_html=True)
 else:
     for _, row in alert_df.iterrows():
-        css_cls = "alert-item" if row["risk_level"] == "high_risk" else "alert-item-drift"
-        icon = "🔴" if row["risk_level"] == "high_risk" else "🟡"
+        css_cls = "alert-item" if row["risk_level"] in ["high_risk", "high", "critical"] else "alert-item-drift"
+        icon = "🔴" if row["risk_level"] in ["high_risk", "high", "critical"] else "🟡"
+        
+        explanation_html = ""
+        explanation = row.get("ml_explanation")
+        if pd.notna(explanation) and explanation:
+            explanation_html = f"<div style='margin-top:8px;padding:8px;background:rgba(88,166,255,0.1);border-left:3px solid #58a6ff;border-radius:4px;color:#e6edf3;font-size:12px;'><b>🧠 SHAP Root Cause Analysis:</b> {explanation}</div>"
+            
         st.markdown(
             f"<div class='{css_cls}'>"
             f"<div class='alert-id'>{icon} Incident <code>{row['incident_id']}</code> "
@@ -475,7 +481,9 @@ else:
             f"Decision: {row.get('decision','—')} &nbsp;·&nbsp; "
             f"Retries: {row.get('retry_count',0)} &nbsp;·&nbsp; "
             f"<span style='color:#3d444d'>{row.get('created_at','—')}</span>"
-            f"</div></div>", unsafe_allow_html=True)
+            f"</div>"
+            f"{explanation_html}"
+            f"</div>", unsafe_allow_html=True)
 
 # ── Recent Executions Table ───────────────────────────────────────────────────
 st.markdown("<div class='section-title'>📋 Recent Executions</div>", unsafe_allow_html=True)

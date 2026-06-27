@@ -118,6 +118,7 @@ def disambiguation_step(state: ClinicalState) -> dict:
     """
     raw_note   = state.get("raw_note", "")
     candidates = state.get("icd10_codes") or []
+    ner_votes  = state.get("ner_votes") or []
     use_gemini = bool(os.getenv("GEMINI_API_KEY"))
 
     start = time.perf_counter()
@@ -133,6 +134,21 @@ def disambiguation_step(state: ClinicalState) -> dict:
     if not refined:
         refined = _fallback_select(candidates)
         log.info("[DISAMBIGUATION] Fallback selection: %d codes.", len(refined))
+
+    # ── Apply Bayesian Confidence Adjustment ──────────────────────────────────
+    term_to_posterior = {v["term"]: v.get("posterior", 0.5) for v in ner_votes}
+    
+    for code in refined:
+        base_conf = code.get("confidence", 0.6)
+        posterior = term_to_posterior.get(code["term"], 0.5)
+        # Weighted average: 40% LLM, 60% Bayesian ensemble
+        adjusted = round((base_conf * 0.4) + (posterior * 0.6), 2)
+        
+        log.info(
+            "[DISAMBIGUATION] Adjusting '%s' confidence: LLM=%.2f, Bayes=%.2f -> Final=%.2f", 
+            code["term"], base_conf, posterior, adjusted
+        )
+        code["confidence"] = adjusted
 
     # Overall confidence = mean of individual code confidences
     if refined:
