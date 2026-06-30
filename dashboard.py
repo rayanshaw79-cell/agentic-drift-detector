@@ -253,12 +253,21 @@ with st.sidebar:
 
     st.markdown("### ⚙️ Filters")
     min_score = st.slider("Min Drift Score", 0, 100, 0)
-    severity_filter = st.multiselect(
-        "Severity", ["low", "medium", "high"], default=["low", "medium", "high"]
-    )
-    decision_filter = st.multiselect(
-        "Decision", ["auto_resolve", "escalate"], default=["auto_resolve", "escalate"]
-    )
+    
+    if IS_CLINICAL:
+        severity_filter = []
+        decision_filter = st.multiselect(
+            "Decision", 
+            ["complete", "requires_clinical_review"], 
+            default=["complete", "requires_clinical_review"]
+        )
+    else:
+        severity_filter = st.multiselect(
+            "Severity", ["low", "medium", "high"], default=["low", "medium", "high"]
+        )
+        decision_filter = st.multiselect(
+            "Decision", ["auto_resolve", "escalate"], default=["auto_resolve", "escalate"]
+        )
 
     st.markdown("---")
     if st.button("🔄 Refresh Now", use_container_width=True):
