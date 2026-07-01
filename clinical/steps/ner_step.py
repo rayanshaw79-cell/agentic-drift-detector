@@ -171,11 +171,12 @@ def ner_step(state: ClinicalState) -> dict:
     Runs 3 extractors (Gemini, Regex, NLM API) in parallel, then applies
     Bayesian voting to compute P(Entity Exists | Votes) per term.
 
-    Reads:  state["raw_note"]
+    Reads:  state["deid_note"] (fallback to state["raw_note"])
     Writes: state["extracted_diagnoses"] — list of high-confidence terms
             state["ner_votes"]            — per-term extractor votes & posteriors
     """
-    raw_note   = state.get("raw_note", "")
+    # Use the scrubbed note from the De-ID step if available
+    raw_note   = state.get("deid_note") or state.get("raw_note", "")
     use_gemini = bool(os.getenv("GEMINI_API_KEY"))
     start      = time.perf_counter()
 

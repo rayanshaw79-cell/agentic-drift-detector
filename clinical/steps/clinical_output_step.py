@@ -46,7 +46,7 @@ def clinical_output_step(state: ClinicalState) -> dict:
         table.add_column("Field",  style="dim", min_width=22)
         table.add_column("Value",  style="bold white")
 
-        table.add_row("Record ID",   record.get("record_id", "—"))
+        table.add_row("Record ID",   record.get("record_id", "-"))
         table.add_row("Status",      f"[bold {status_colour}]{status}[/]")
         table.add_row("Confidence",  f"{confidence:.2f}")
         table.add_row("Codes Found", str(len(codes)))
@@ -54,12 +54,12 @@ def clinical_output_step(state: ClinicalState) -> dict:
         for i, c in enumerate(codes, 1):
             table.add_row(
                 f"  ICD-10 [{i}]",
-                f"[bold]{c.get('code','?')}[/] — {c.get('description','?')} "
+                f"[bold]{c.get('code','?')}[/] - {c.get('description','?')} "
                 f"(conf: {c.get('confidence', 0):.2f})",
             )
 
         if state.get("path_taken"):
-            table.add_row("Path", " → ".join(state["path_taken"]))
+            table.add_row("Path", " -> ".join(state["path_taken"]))
 
         console.print()
         console.print(Panel(table, title="[bold cyan]Clinical Coding Result[/]",

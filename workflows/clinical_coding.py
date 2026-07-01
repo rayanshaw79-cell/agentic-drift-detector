@@ -24,9 +24,24 @@ from clinical.steps.meat_validation_step import meat_validation_step
 from clinical.steps.validation_step import validation_step
 from clinical.steps.clinical_intervention_step import clinical_intervention_step
 from clinical.steps.clinical_output_step import clinical_output_step
+from clinical.steps.deid_step import deid_step
+from clinical.steps.compliance_checker_step import compliance_checker_step
 
 
 # ── Conditional Edge Logic ────────────────────────────────────────────────────
+
+def should_retry_deid(state: ClinicalState) -> str:
+    """
+    Decide what happens after the Compliance Checker node.
+    - If phi_detected is True and retry_count < 3: loop back to deid
+    - Otherwise: proceed to ner
+    """
+    phi_detected = state.get("phi_detected", False)
+    retry_count = state.get("retry_count", 0)
+    
+    if phi_detected and retry_count < 3:
+        return "deid"
+    return "ner"
 
 def should_recode(state: ClinicalState) -> str:
     """
@@ -55,6 +70,8 @@ def build_clinical_workflow() -> StateGraph:
     workflow = StateGraph(ClinicalState)
 
     # Nodes
+    workflow.add_node("deid",                   deid_step)
+    workflow.add_node("compliance_checker",     compliance_checker_step)
     workflow.add_node("ner",                   ner_step)
     workflow.add_node("ontology_lookup",        ontology_lookup_step)
     workflow.add_node("disambiguation",         disambiguation_step)
@@ -63,8 +80,17 @@ def build_clinical_workflow() -> StateGraph:
     workflow.add_node("clinical_intervention",  clinical_intervention_step)
     workflow.add_node("clinical_output",        clinical_output_step)
 
-    # Linear path: NER → Lookup → Disambiguation → MEAT Validation → Validation
-    workflow.set_entry_point("ner")
+    # Linear path: De-ID → Compliance → NER → Lookup → Disambiguation → MEAT Validation → Validation
+    workflow.set_entry_point("deid")
+    workflow.add_edge("deid", "compliance_checker")
+    workflow.add_conditional_edges(
+        "compliance_checker",
+        should_retry_deid,
+        {
+            "deid": "deid",
+            "ner": "ner",
+        },
+    )
     workflow.add_edge("ner",             "ontology_lookup")
     workflow.add_edge("ontology_lookup", "disambiguation")
     workflow.add_edge("disambiguation",  "meat_validation")   # NEW

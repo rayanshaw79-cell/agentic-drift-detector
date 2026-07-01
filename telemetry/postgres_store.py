@@ -66,12 +66,12 @@ _INSERT = """
         tenant_id, incident_id, severity, decision, confidence,
         step_count, retry_count, path_taken, execution_time_ms,
         drift_score, risk_level, workflow_type, overall_confidence,
-        unresolved_count, total_entities, ml_explanation
+        unresolved_count, total_entities, ml_explanation, privacy_leak_risk
     ) VALUES (
         %(tenant_id)s, %(incident_id)s, %(severity)s, %(decision)s, %(confidence)s,
         %(step_count)s, %(retry_count)s, %(path_taken)s, %(execution_time_ms)s,
         %(drift_score)s, %(risk_level)s, %(workflow_type)s, %(overall_confidence)s,
-        %(unresolved_count)s, %(total_entities)s, %(ml_explanation)s
+        %(unresolved_count)s, %(total_entities)s, %(ml_explanation)s, %(privacy_leak_risk)s
     )
 """
 
@@ -86,10 +86,11 @@ _BASELINE_QUERY = """
                  THEN CASE WHEN decision = 'escalate' THEN 1.0 ELSE 0.0 END
                  ELSE NULL END) AS low_severity_escalation_rate,
         AVG(overall_confidence) AS avg_coding_confidence,
-        SUM(unresolved_count)::FLOAT / NULLIF(SUM(total_entities), 0) AS avg_unresolved_rate
+        SUM(unresolved_count)::FLOAT / NULLIF(SUM(total_entities), 0) AS avg_unresolved_rate,
+        AVG(privacy_leak_risk) AS avg_privacy_leak_risk
     FROM (
         SELECT step_count, retry_count, execution_time_ms, decision, severity,
-               overall_confidence, unresolved_count, total_entities
+               overall_confidence, unresolved_count, total_entities, privacy_leak_risk
         FROM executions
         WHERE tenant_id = %(tenant_id)s
         ORDER BY created_at DESC
@@ -104,6 +105,7 @@ _DEFAULT_BASELINE = {
     "escalation_rate": 0.2,
     "high_severity_rate": 0.2,
     "low_severity_escalation_rate": 0.05,
+    "avg_privacy_leak_risk": 0.0,
 }
 
 
@@ -176,6 +178,7 @@ def save_execution_state(
         "unresolved_count":  unresolved_count,
         "total_entities":    total_entities,
         "ml_explanation":    analysis.get("ml_explanation") if analysis else None,
+        "privacy_leak_risk": state.get("privacy_leak_risk", 0.0),
     }
 
     with _get_conn() as conn:
@@ -214,6 +217,7 @@ def get_historical_metrics(
         "low_severity_escalation_rate": float(row["low_severity_escalation_rate"] or 0.05),
         "avg_coding_confidence":        float(row["avg_coding_confidence"]        or 0.75),
         "avg_unresolved_rate":          float(row["avg_unresolved_rate"]          or 0.05),
+        "avg_privacy_leak_risk":        float(row["avg_privacy_leak_risk"]        or 0.0),
     }
 
 

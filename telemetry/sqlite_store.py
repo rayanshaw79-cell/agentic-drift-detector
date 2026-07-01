@@ -33,6 +33,7 @@ _CREATE_TABLE = """
         risk_level        TEXT    DEFAULT 'healthy',
         workflow_type     TEXT    DEFAULT 'incident_triage',
         overall_confidence REAL   DEFAULT NULL,
+        privacy_leak_risk REAL    DEFAULT 0.0,
         created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
     )
 """
@@ -46,6 +47,7 @@ _MIGRATIONS = [
     ("unresolved_count",   "INTEGER DEFAULT 0"),
     ("total_entities",     "INTEGER DEFAULT 0"),
     ("ml_explanation",     "TEXT DEFAULT NULL"),
+    ("privacy_leak_risk",  "REAL DEFAULT 0.0"),
 ]
 
 _INSERT = """
@@ -53,8 +55,8 @@ _INSERT = """
         incident_id, severity, decision, confidence,
         step_count, retry_count, path_taken, execution_time_ms,
         drift_score, risk_level, workflow_type, overall_confidence,
-        unresolved_count, total_entities, ml_explanation
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        unresolved_count, total_entities, ml_explanation, privacy_leak_risk
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 _BASELINE_QUERY = """
@@ -68,10 +70,11 @@ _BASELINE_QUERY = """
                  THEN CASE WHEN decision = 'escalate' THEN 1.0 ELSE 0.0 END
                  ELSE NULL END) AS low_severity_escalation_rate,
         AVG(overall_confidence) AS avg_coding_confidence,
-        SUM(unresolved_count)*1.0 / NULLIF(SUM(total_entities), 0) AS avg_unresolved_rate
+        SUM(unresolved_count)*1.0 / NULLIF(SUM(total_entities), 0) AS avg_unresolved_rate,
+        AVG(privacy_leak_risk) AS avg_privacy_leak_risk
     FROM (
         SELECT step_count, retry_count, execution_time_ms, decision, severity,
-               overall_confidence, unresolved_count, total_entities
+               overall_confidence, unresolved_count, total_entities, privacy_leak_risk
         FROM executions
         ORDER BY id DESC
         LIMIT ?
@@ -87,6 +90,7 @@ _DEFAULT_BASELINE = {
     "low_severity_escalation_rate": 0.05,
     "avg_coding_confidence":       0.75,
     "avg_unresolved_rate":         0.05,
+    "avg_privacy_leak_risk":       0.0,
 }
 
 
@@ -134,6 +138,7 @@ def save_execution_state(
         unresolved_count,
         total_entities,
         analysis.get("ml_explanation") if analysis else None,
+        state.get("privacy_leak_risk", 0.0),
     )
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(_INSERT, values)
@@ -164,4 +169,5 @@ def get_historical_metrics(
         "low_severity_escalation_rate": row["low_severity_escalation_rate"] or 0.05,
         "avg_coding_confidence":        row["avg_coding_confidence"]        or 0.75,
         "avg_unresolved_rate":          row["avg_unresolved_rate"]          or 0.05,
+        "avg_privacy_leak_risk":        row["avg_privacy_leak_risk"]        or 0.0,
     }

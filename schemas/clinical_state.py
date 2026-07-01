@@ -15,6 +15,11 @@ class ClinicalState(TypedDict):
     # ── Identity ──────────────────────────────────────────────────────────────
     record_id: str
     raw_note: str                        # Unstructured clinical text input
+    
+    # ── De-identification (PHI/PII Scrubbing) ─────────────────────────────────
+    deid_note: Optional[str]             # Scrubbed version of the clinical text
+    phi_detected: Optional[bool]         # True if the compliance checker found leaks
+    privacy_leak_risk: Optional[float]   # Severity/Risk of privacy leaks (0.0 to 1.0)
 
     # ── Extracted Entities (NER step output) ──────────────────────────────────
     extracted_diagnoses: Optional[List[str]]    # e.g. ["hypertension", "T2DM"]

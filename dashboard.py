@@ -365,7 +365,7 @@ heal_count  = (
 )
 high_risk_ct = (df["risk_level"] == "high_risk").sum() if "risk_level" in df.columns else 0
 
-c1, c2, c3, c4, c5, c6 = st.columns(6)
+c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
 metric_card(c1, "Total Runs",      f"{total:,}")
 metric_card(c2, "Avg Drift Score", f"{avg_drift:.1f}",  sub="0 = perfect")
 metric_card(c3, "Avg Latency",     f"{avg_latency:.2f}s")
@@ -374,14 +374,19 @@ if IS_CLINICAL:
     # Clinical-specific KPIs
     avg_conf = df["overall_confidence"].mean() if "overall_confidence" in df.columns else 0
     review_ct = (df["decision"] == "requires_clinical_review").sum() if "decision" in df.columns else 0
+    avg_privacy = df["privacy_leak_risk"].mean() if "privacy_leak_risk" in df.columns else 0
+    
     metric_card(c4, "Avg Confidence",  f"{avg_conf:.2f}",   sub="coding accuracy")
     metric_card(c5, "Human Review",    f"{review_ct:,}",    sub="clinical_intervention")
+    metric_card(c6, "De-ID Leak Risk", f"{avg_privacy:.2f}",sub="0 = safe")
 else:
     esc_rate = (df["decision"] == "escalate").mean() * 100
     metric_card(c4, "Escalation Rate", f"{esc_rate:.1f}%")
     metric_card(c5, "Healing Events",  f"{heal_count:,}",   sub="intervention node")
+    # c6 is intentionally left blank for Incident Triage to keep alignment
+    metric_card(c6, "-", "-")
 
-metric_card(c6, "High-Risk Runs",  f"{high_risk_ct:,}", sub="score ≥ 60")
+metric_card(c7, "High-Risk Runs",  f"{high_risk_ct:,}", sub="score ≥ 60")
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ── Charts Row 1 ──────────────────────────────────────────────────────────────
