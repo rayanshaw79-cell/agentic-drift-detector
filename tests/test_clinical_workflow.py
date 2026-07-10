@@ -252,9 +252,17 @@ class TestClinicalWorkflowIntegration:
         # Redirect DB to a temp file so we don't pollute the real DB
         monkeypatch.setenv("DB_PATH", str(tmp_path / "test.db"))
 
-        from workflows.clinical_coding import clinical_coding_workflow
-        state = self._initial_state("Patient with essential hypertension and diabetes.")
-        result = clinical_coding_workflow(state)
+        with patch("workflows.clinical_coding.sdoh_integration_step") as mock_sdoh:
+            def dummy_sdoh(state):
+                path = state.get("path_taken", [])
+                if "sdoh" not in path:
+                    path = path + ["sdoh"]
+                return {"path_taken": path, "sdoh_risk_label": "low", "sdoh_risk_score": 0.1}
+            mock_sdoh.side_effect = dummy_sdoh
+            
+            from workflows.clinical_coding import clinical_coding_workflow
+            state = self._initial_state("Patient with essential hypertension and diabetes.")
+            result = clinical_coding_workflow(state)
 
         assert result.get("coding_status") in ("complete", "requires_clinical_review")
         assert "ner" in result.get("path_taken", [])

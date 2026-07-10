@@ -48,6 +48,9 @@ _MIGRATIONS = [
     ("total_entities",     "INTEGER DEFAULT 0"),
     ("ml_explanation",     "TEXT DEFAULT NULL"),
     ("privacy_leak_risk",  "REAL DEFAULT 0.0"),
+    ("sdoh_risk_label",    "TEXT DEFAULT NULL"),
+    ("sdoh_risk_score",    "REAL DEFAULT NULL"),
+    ("sdoh_shap_factors",  "TEXT DEFAULT NULL"),
 ]
 
 _INSERT = """
@@ -55,8 +58,9 @@ _INSERT = """
         incident_id, severity, decision, confidence,
         step_count, retry_count, path_taken, execution_time_ms,
         drift_score, risk_level, workflow_type, overall_confidence,
-        unresolved_count, total_entities, ml_explanation, privacy_leak_risk
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        unresolved_count, total_entities, ml_explanation, privacy_leak_risk,
+        sdoh_risk_label, sdoh_risk_score, sdoh_shap_factors
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 _BASELINE_QUERY = """
@@ -139,6 +143,9 @@ def save_execution_state(
         total_entities,
         analysis.get("ml_explanation") if analysis else None,
         state.get("privacy_leak_risk", 0.0),
+        state.get("sdoh_risk_label"),
+        state.get("sdoh_risk_score"),
+        json.dumps(state.get("sdoh_shap_factors", []))
     )
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(_INSERT, values)

@@ -26,7 +26,7 @@ from clinical.steps.clinical_intervention_step import clinical_intervention_step
 from clinical.steps.clinical_output_step import clinical_output_step
 from clinical.steps.deid_step import deid_step
 from clinical.steps.compliance_checker_step import compliance_checker_step
-
+from clinical.steps.sdoh_integration_step import sdoh_integration_step
 
 # ── Conditional Edge Logic ────────────────────────────────────────────────────
 
@@ -51,7 +51,7 @@ def should_recode(state: ClinicalState) -> str:
       context so the agent has a second chance to resolve ambiguous terms.
     - Persistent failure (retry_count >= 2): send to clinical intervention
       (agentic healing → human review queue).
-    - Success: proceed to output.
+    - Success: proceed to sdoh_integration.
     """
     confidence  = state.get("overall_confidence") or 0.0
     retry_count = state.get("retry_count", 0)
@@ -61,7 +61,7 @@ def should_recode(state: ClinicalState) -> str:
         return "disambiguation"   # retry with the existing note context
     elif status == "requires_clinical_review" and retry_count >= 2:
         return "clinical_intervention"
-    return "clinical_output"
+    return "sdoh_integration"
 
 
 # ── Graph Factory ─────────────────────────────────────────────────────────────
@@ -75,8 +75,9 @@ def build_clinical_workflow() -> StateGraph:
     workflow.add_node("ner",                   ner_step)
     workflow.add_node("ontology_lookup",        ontology_lookup_step)
     workflow.add_node("disambiguation",         disambiguation_step)
-    workflow.add_node("meat_validation",        meat_validation_step)   # NEW
+    workflow.add_node("meat_validation",        meat_validation_step)
     workflow.add_node("validation",             validation_step)
+    workflow.add_node("sdoh_integration",       sdoh_integration_step)  # NEW
     workflow.add_node("clinical_intervention",  clinical_intervention_step)
     workflow.add_node("clinical_output",        clinical_output_step)
 
@@ -93,8 +94,8 @@ def build_clinical_workflow() -> StateGraph:
     )
     workflow.add_edge("ner",             "ontology_lookup")
     workflow.add_edge("ontology_lookup", "disambiguation")
-    workflow.add_edge("disambiguation",  "meat_validation")   # NEW
-    workflow.add_edge("meat_validation", "validation")         # NEW
+    workflow.add_edge("disambiguation",  "meat_validation")
+    workflow.add_edge("meat_validation", "validation")
 
     # Conditional routing after validation
     workflow.add_conditional_edges(
@@ -103,9 +104,12 @@ def build_clinical_workflow() -> StateGraph:
         {
             "disambiguation":        "disambiguation",
             "clinical_intervention": "clinical_intervention",
-            "clinical_output":       "clinical_output",
+            "sdoh_integration":      "sdoh_integration",
         },
     )
+
+    # SDOH integration proceeds to output
+    workflow.add_edge("sdoh_integration", "clinical_output")
 
     # Intervention always terminates at clinical_output
     workflow.add_edge("clinical_intervention", "clinical_output")

@@ -45,6 +45,11 @@ class ClinicalState(TypedDict):
     overall_confidence: Optional[float]  # Aggregate confidence across all codes
     claims_ready: Optional[bool]         # True if all codes are claims-submittable
 
+    # ── SDOH Population Health (Added during Clinical Unification) ────────────
+    sdoh_risk_label: Optional[str]       # "low", "moderate", "high", "critical"
+    sdoh_risk_score: Optional[float]     # Underlying float probability from ML
+    sdoh_shap_factors: Optional[List[dict]] # Top drivers from SHAP explanation
+
     # ── Execution Metadata (accumulated via LangGraph Annotated reducers) ──────
     current_step: str
     step_count:        Annotated[int, operator.add]

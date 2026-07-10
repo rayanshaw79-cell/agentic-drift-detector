@@ -66,12 +66,14 @@ _INSERT = """
         tenant_id, incident_id, severity, decision, confidence,
         step_count, retry_count, path_taken, execution_time_ms,
         drift_score, risk_level, workflow_type, overall_confidence,
-        unresolved_count, total_entities, ml_explanation, privacy_leak_risk
+        unresolved_count, total_entities, ml_explanation, privacy_leak_risk,
+        sdoh_risk_label, sdoh_risk_score, sdoh_shap_factors
     ) VALUES (
         %(tenant_id)s, %(incident_id)s, %(severity)s, %(decision)s, %(confidence)s,
         %(step_count)s, %(retry_count)s, %(path_taken)s, %(execution_time_ms)s,
         %(drift_score)s, %(risk_level)s, %(workflow_type)s, %(overall_confidence)s,
-        %(unresolved_count)s, %(total_entities)s, %(ml_explanation)s, %(privacy_leak_risk)s
+        %(unresolved_count)s, %(total_entities)s, %(ml_explanation)s, %(privacy_leak_risk)s,
+        %(sdoh_risk_label)s, %(sdoh_risk_score)s, %(sdoh_shap_factors)s
     )
 """
 
@@ -177,8 +179,10 @@ def save_execution_state(
         "overall_confidence":state.get("overall_confidence"),
         "unresolved_count":  unresolved_count,
         "total_entities":    total_entities,
-        "ml_explanation":    analysis.get("ml_explanation") if analysis else None,
         "privacy_leak_risk": state.get("privacy_leak_risk", 0.0),
+        "sdoh_risk_label":   state.get("sdoh_risk_label"),
+        "sdoh_risk_score":   state.get("sdoh_risk_score"),
+        "sdoh_shap_factors": Json(state.get("sdoh_shap_factors", [])),
     }
 
     with _get_conn() as conn:
