@@ -7,7 +7,6 @@ separate from the main telemetry.db.
 Database file: sdoh_patients.db (in the project root)
 """
 
-import json
 import logging
 import os
 import sqlite3

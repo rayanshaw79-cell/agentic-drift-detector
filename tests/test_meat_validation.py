@@ -9,7 +9,6 @@ Tests cover:
   - Full pipeline correctly separates active vs. historical conditions
 """
 
-import pytest
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

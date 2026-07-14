@@ -33,3 +33,15 @@ scikit-learn>=1.3.0
 joblib>=1.3.0
 numpy>=1.24.0
 shap>=0.40.0
+
+# API / Microservices
+fastapi>=0.100.0,<1
+uvicorn>=0.23.0,<1
+
+# Resilience & Caching
+tenacity>=8.2.0,<9
+langchain-community>=0.2,<1
+
+# CI/CD & Code Quality
+mypy>=1.0.0,<2
+ruff>=0.1.0,<1

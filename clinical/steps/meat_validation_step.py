@@ -27,6 +27,7 @@ import os
 import time
 
 from schemas.clinical_state import ClinicalState
+from tenacity import retry, wait_exponential, stop_after_attempt
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +59,7 @@ _MEAT_KEYWORDS: dict[str, list[str]] = {
 _FALLBACK_MSG = "No direct MEAT evidence found in note."
 
 
+@retry(wait=wait_exponential(min=1, max=10), stop=stop_after_attempt(3))
 def _llm_meat_validate(raw_note: str, codes: list[dict]) -> list[dict]:
     """
     Call Gemini 2.0 Flash to perform structured MEAT validation.

@@ -10,8 +10,6 @@ Usage:
 
 import argparse
 import logging
-import os
-import sys
 import uuid
 
 from dotenv import load_dotenv

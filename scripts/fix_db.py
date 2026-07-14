@@ -45,7 +45,7 @@ try:
             sel_str = ', '.join(select_cols)
             ins_str = ', '.join(insert_cols)
             
-            print(f"Mapping old columns to new schema...")
+            print("Mapping old columns to new schema...")
             conn.execute(f'INSERT INTO executions ({ins_str}) SELECT {sel_str} FROM _executions_old')
             conn.execute('DROP TABLE _executions_old')
             conn.commit()

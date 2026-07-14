@@ -2,6 +2,7 @@ import json
 import os
 import sqlite3
 import time
+from dotenv import load_dotenv
 
 import pandas as pd
 import plotly.express as px
@@ -17,7 +18,6 @@ st.set_page_config(
 )
 
 # ── Backend Detection ─────────────────────────────────────────────────────────
-from dotenv import load_dotenv
 load_dotenv()
 USE_POSTGRES = bool(os.getenv("DATABASE_URL"))
 DB_PATH = os.path.join(os.path.dirname(__file__), "telemetry.db")
@@ -234,7 +234,8 @@ with st.sidebar:
             st.success(f"Loaded: **{uploaded_file.name}** ({len(uploaded_note)} chars)")
             if st.button("▶ Run Clinical Coding", use_container_width=True, type="primary"):
                 with st.spinner("Running clinical coding agent…"):
-                    import subprocess, sys
+                    import subprocess
+                    import sys
                     result = subprocess.run(
                         [sys.executable, "-m", "clinical.run_clinical",
                          "--note", uploaded_note, "--no-alerts"],

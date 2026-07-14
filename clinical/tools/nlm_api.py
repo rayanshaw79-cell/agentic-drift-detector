@@ -10,7 +10,6 @@ Both APIs are completely free, open, and require no API key.
 
 import logging
 import time
-from typing import Optional
 
 import requests
 

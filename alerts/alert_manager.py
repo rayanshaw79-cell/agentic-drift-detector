@@ -54,7 +54,7 @@ def _build_discord_payload(analysis: dict, state: dict) -> dict:
 
     return {
         "embeds": [{
-            "title": f"Agentic Drift Alert",
+            "title": "Agentic Drift Alert",
             "color": color,
             "fields": [
                 {"name": "Risk Level", "value": f"`{risk}`", "inline": True},

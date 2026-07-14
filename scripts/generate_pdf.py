@@ -1,4 +1,3 @@
-import os
 from markdown_pdf import MarkdownPdf, Section
 
 md_path = r"c:\Users\acer\agentic-drift-detector\artifacts\Architecture_Overview.md"

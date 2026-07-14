@@ -71,9 +71,12 @@ def _sdoh_risk_multiplier(poverty_rate, aqi, food_risk, smoking, alcohol) -> flo
 
 
 def _assign_label(risk_score: float) -> str:
-    if risk_score < 0.30:   return "low"
-    if risk_score < 0.55:   return "moderate"
-    if risk_score < 0.75:   return "high"
+    if risk_score < 0.30:
+        return "low"
+    if risk_score < 0.55:
+        return "moderate"
+    if risk_score < 0.75:
+        return "high"
     return "critical"
 
 

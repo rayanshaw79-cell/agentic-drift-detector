@@ -10,7 +10,6 @@ import logging
 import os
 import sqlite3
 
-from schemas.incident_state import IncidentState
 
 log = logging.getLogger(__name__)
 

@@ -12,7 +12,6 @@ Actions:
 """
 
 import logging
-import time
 
 from schemas.clinical_state import ClinicalState
 

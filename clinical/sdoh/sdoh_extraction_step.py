@@ -28,7 +28,8 @@ def _llm_extract_from_note(raw_note: str) -> dict:
     if not os.getenv("GEMINI_API_KEY") or not raw_note:
         return {}
 
-    import re, json
+    import re
+    import json
     from langchain_google_genai import ChatGoogleGenerativeAI
     from langchain_core.messages import SystemMessage, HumanMessage
 

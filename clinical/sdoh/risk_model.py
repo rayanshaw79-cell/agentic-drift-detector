@@ -9,7 +9,6 @@ The model is persisted to clinical/sdoh/risk_model.joblib after training.
 """
 
 import logging
-import os
 from pathlib import Path
 
 import joblib

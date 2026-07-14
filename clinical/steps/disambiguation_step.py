@@ -16,10 +16,12 @@ import re
 import time
 
 from schemas.clinical_state import ClinicalState
+from tenacity import retry, wait_exponential, stop_after_attempt
 
 log = logging.getLogger(__name__)
 
 
+@retry(wait=wait_exponential(min=1, max=10), stop=stop_after_attempt(3))
 def _gemini_disambiguate(raw_note: str, candidates: list[dict]) -> list[dict]:
     """
     Use Gemini to select the single best ICD-10 code per term and assign

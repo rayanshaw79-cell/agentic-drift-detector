@@ -53,7 +53,6 @@ def should_recode(state: ClinicalState) -> str:
       (agentic healing → human review queue).
     - Success: proceed to sdoh_integration.
     """
-    confidence  = state.get("overall_confidence") or 0.0
     retry_count = state.get("retry_count", 0)
     status      = state.get("coding_status", "complete")
 

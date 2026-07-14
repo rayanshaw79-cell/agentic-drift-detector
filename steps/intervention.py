@@ -1,6 +1,4 @@
-import os
 import random
-import json
 from schemas.incident_state import IncidentState
 
 def intervention_step(state: IncidentState) -> dict:
@@ -12,13 +10,10 @@ def intervention_step(state: IncidentState) -> dict:
     """
     print("\n  [INTERVENTION] DRIFT LOOP DETECTED — Applying Deterministic Circuit Breaker...")
     
-    incident_text = state.get("incident_text", "Unknown incident")
-    severity = state.get("severity", "unknown")
-    
     decision = "escalate"
     forced_confidence = 0.0
     
-    print(f"  [INTERVENTION] Circuit breaker activated. Escalating incident safely.")
+    print("  [INTERVENTION] Circuit breaker activated. Escalating incident safely.")
 
     latency = random.randint(50, 100)
 

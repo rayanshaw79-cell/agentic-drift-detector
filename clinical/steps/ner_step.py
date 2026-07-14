@@ -19,8 +19,7 @@ import logging
 import os
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
 from schemas.clinical_state import ClinicalState
 from clinical.tools.bayesian_ensemble import ensemble_vote

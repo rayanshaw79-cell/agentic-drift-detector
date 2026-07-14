@@ -1,4 +1,3 @@
-import pytest
 from drift.drift_detector import calculate_drift_score
 
 def test_ml_drift_detector_healthy():

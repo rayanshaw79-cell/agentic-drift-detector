@@ -1,6 +1,3 @@
-import pytest
-from workflows.incident_triage import incident_triage_workflow
-from schemas.incident_state import IncidentState
 
 
 def _base_state(incident_id="test-123"):

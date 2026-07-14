@@ -13,7 +13,6 @@ Usage:
 
 import argparse
 import logging
-import sys
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -52,8 +51,6 @@ def main() -> None:
 
     # Print a full sklearn classification report
     from sklearn.metrics import classification_report
-    from sklearn.preprocessing import LabelEncoder
-    import numpy as np
 
     clf = bundle["model"]
     le  = bundle["label_encoder"]
