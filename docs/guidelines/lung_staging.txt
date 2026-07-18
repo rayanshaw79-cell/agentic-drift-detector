@@ -1,0 +1,70 @@
+LUNG CANCER STAGING — NCI/AJCC 8TH EDITION SUMMARY
+
+SOURCE: National Cancer Institute PDQ; AJCC Cancer Staging Manual 8th Edition
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NON-SMALL CELL LUNG CANCER (NSCLC) — TNM DEFINITIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRIMARY TUMOR (T):
+T1: Tumor ≤ 3 cm, surrounded by lung or visceral pleura, no bronchoscopic evidence of invasion more proximal than lobar bronchus.
+  T1a: Tumor ≤ 1 cm
+  T1b: Tumor > 1 cm but ≤ 2 cm
+  T1c: Tumor > 2 cm but ≤ 3 cm
+T2: Tumor > 3 cm but ≤ 5 cm; OR tumor with any of: involves main bronchus ≥ 2 cm from carina; invades visceral pleura; associated with atelectasis or obstructive pneumonitis.
+  T2a: Tumor > 3 cm but ≤ 4 cm
+  T2b: Tumor > 4 cm but ≤ 5 cm
+T3: Tumor > 5 cm but ≤ 7 cm; OR directly invades chest wall, phrenic nerve, or parietal pericardium; OR separate tumor nodule(s) in same lobe as primary.
+T4: Tumor > 7 cm; OR tumor of any size that invades mediastinum, diaphragm, heart, great vessels, trachea, recurrent laryngeal nerve, esophagus, vertebral body, or carina; OR separate tumor nodule(s) in a different ipsilateral lobe.
+
+REGIONAL LYMPH NODES (N):
+N0: No regional lymph node metastasis.
+N1: Metastasis in ipsilateral peribronchial and/or ipsilateral hilar lymph nodes, and intrapulmonary nodes; includes involvement by direct extension.
+N2: Metastasis in ipsilateral mediastinal and/or subcarinal lymph nodes.
+N3: Metastasis in contralateral mediastinal, contralateral hilar, ipsilateral or contralateral scalene, or supraclavicular lymph nodes.
+
+DISTANT METASTASIS (M):
+M0: No distant metastasis.
+M1a: Separate tumor nodule(s) in a contralateral lobe; tumor with pleural or pericardial nodules; malignant pleural or pericardial effusion.
+M1b: Single extrathoracic metastasis in a single organ.
+M1c: Multiple extrathoracic metastases in one or more organs.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STAGE GROUPINGS (NSCLC)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Stage IA1: T1a N0 M0
+Stage IA2: T1b N0 M0
+Stage IA3: T1c N0 M0
+Stage IB:  T2a N0 M0
+Stage IIA: T2b N0 M0
+Stage IIB: T1a-c N1 M0; T2a N1 M0; T2b N1 M0; T3 N0 M0
+Stage IIIA: T1a-c N2 M0; T2a-b N2 M0; T3 N1 M0; T4 N0 M0; T4 N1 M0
+Stage IIIB: T1a-c N3 M0; T2a-b N3 M0; T3 N2 M0; T4 N2 M0
+Stage IIIC: T3 N3 M0; T4 N3 M0
+Stage IVA: Any T, Any N, M1a or M1b
+Stage IVB: Any T, Any N, M1c
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SMALL CELL LUNG CANCER (SCLC)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SCLC is often staged using the Veterans Administration Lung Study Group (VALSG) system:
+Limited Stage: Disease confined to the ipsilateral hemithorax and regional lymph nodes that can be encompassed within a tolerable radiation port.
+Extensive Stage: Disease beyond limited stage, including contralateral lung or distant metastases.
+
+AJCC TNM staging is also applicable and follows the same T/N/M definitions as NSCLC.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KEY BIOMARKERS FOR LUNG CANCER TREATMENT SELECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EGFR mutations (exon 19 deletion, L858R exon 21, exon 20 insertion): First-line EGFR TKI therapy (osimertinib preferred).
+ALK rearrangement: First-line ALK inhibitor (alectinib, brigatinib, lorlatinib).
+ROS1 rearrangement: Crizotinib or entrectinib.
+KRAS G12C mutation: Sotorasib or adagrasib (second-line).
+BRAF V600E: Dabrafenib + trametinib.
+PD-L1 TPS ≥ 50%: First-line pembrolizumab monotherapy (if no driver mutation).
+PD-L1 TPS 1–49%: Pembrolizumab + platinum doublet chemotherapy.
+MSI-H/dMMR: Pembrolizumab (any solid tumor, second-line).
+TMB-High (≥ 10 mut/Mb): Pembrolizumab (pan-tumor indication).

@@ -8,7 +8,8 @@ accumulates them correctly across nodes.
 """
 
 import operator
-from typing import TypedDict, Optional, List, Annotated
+from typing import Optional, List, Annotated
+from typing import TypedDict
 
 
 class ClinicalState(TypedDict):
@@ -49,6 +50,25 @@ class ClinicalState(TypedDict):
     sdoh_risk_label: Optional[str]       # "low", "moderate", "high", "critical"
     sdoh_risk_score: Optional[float]     # Underlying float probability from ML
     sdoh_shap_factors: Optional[List[dict]] # Top drivers from SHAP explanation
+
+    # ── Oncology Specific Fields (Harmony & PRISM) ─────────────────────────────
+    # Extracted from pathology / clinical notes
+    document_type: Optional[str]         # From Constellation Router: pathology_report | radiology | genomics | progress_note | unknown
+    primary_site: Optional[str]          # e.g., "Lung", "Breast"
+    histology: Optional[str]             # e.g., "Adenocarcinoma"
+    tnm_stage: Optional[dict]            # {"T": "T2", "N": "N1", "M": "M0", "overall": "Stage II"}
+    biomarkers: Optional[List[dict]]     # e.g., [{"marker": "EGFR", "status": "Positive", "evidence_span": "..."}]
+    
+    # ── Longitudinal Reasoning (Symphony) ──────────────────────────────────────
+    visit_history: Optional[List[dict]]  # History of past visits to build timeline
+    pre_chart_summary: Optional[str]     # Chronological summary of disease progression
+    
+    # ── Clinical Trial Matching (PRISM) ───────────────────────────────────────
+    trial_matches: Optional[List[dict]]  # [{"nct_id": "NCT123", "match_confidence": 0.9, "evidence": "..."}]
+
+    # ── Self-Correction Evaluator Loop (OncoLLM Pillar 4) ────────────────────
+    eval_feedback: Optional[str]         # Evaluator's critique — injected into re-extraction prompt
+    needs_reextraction: Optional[bool]   # True triggers the correction loop back to staging
 
     # ── Execution Metadata (accumulated via LangGraph Annotated reducers) ──────
     current_step: str

@@ -45,3 +45,9 @@ langchain-community>=0.2,<1
 # CI/CD & Code Quality
 mypy>=1.0.0,<2
 ruff>=0.1.0,<1
+
+# ── OncoLLM Pillar 2 — RAG Guideline Store ─────────────────────────────────
+# In-process vector DB for NCI/NCCN staging guideline retrieval
+chromadb>=0.5,<1
+langchain-chroma>=0.1,<1
+sentence-transformers>=2.7,<4    # Local embeddings (no API key required)

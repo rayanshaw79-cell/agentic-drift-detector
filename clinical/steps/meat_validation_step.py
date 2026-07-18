@@ -121,8 +121,18 @@ Return the JSON array now."""
             raw_text = raw_text[4:]
     raw_text = raw_text.strip()
 
-    return json.loads(raw_text)
-
+    results = json.loads(raw_text)
+    
+    # Strict Provenance Check (Zero Hallucination Guarantee)
+    for res in results:
+        evidence = res.get("meat_evidence", "")
+        if evidence and evidence not in raw_note:
+            log.warning(f"[MEAT PROVENANCE FAILURE] Evidence '{evidence}' not found in raw note. Rejecting.")
+            res["meat_met"] = False
+            res["meat_category"] = "None"
+            res["meat_evidence"] = _FALLBACK_MSG
+            
+    return results
 
 def _regex_meat_validate(raw_note: str, codes: list[dict]) -> list[dict]:
     """

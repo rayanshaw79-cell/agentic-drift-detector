@@ -1,273 +1,104 @@
 # Agentic Drift Detector
 
 ![Python](https://img.shields.io/badge/python-3.11-blue?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?logo=fastapi&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/LangGraph-0.1-purple?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PC9zdmc+)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.35-FF4B4B?logo=streamlit&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-46%20passing-brightgreen?logo=pytest&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Status](https://img.shields.io/badge/status-active-success)
+![TimescaleDB](https://img.shields.io/badge/TimescaleDB-Postgres-F9B115?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
+![CI](https://github.com/rayanshaw79-cell/agentic-drift-detector/actions/workflows/ci.yml/badge.svg)
 
-Detect **behavioral drift and semantic bias** in autonomous, agentic AI workflows by analyzing execution telemetry — even when the system does not explicitly fail.
-
-
-
-## 🧠 Why This Project Exists
-
-Modern agentic AI systems rarely fail loudly.
-Instead, they **silently drift**:
-
-* More steps than before
-* Excessive retries
-* Escalation bias
-* Classification bias
-* Rising latency and cost
-
-These issues don't throw errors — they **erode reliability over time**.
-
-**Agentic Drift Detector** is a production-grade reference implementation that shows how to:
-
-* Orchestrate agentic workflows using **LangGraph**
-* Instrument and persist execution behavior in **SQLite**
-* Detect semantic drift using population-level baselines
-* **Heal** the agent automatically when a drift loop is detected
-* Visualize everything in a live **Streamlit dashboard**
-* Alert teams via **Slack and Discord webhooks**
+An enterprise-grade, distributed AI orchestration platform. Detect **behavioral drift, semantic bias, and degradation** in autonomous, agentic workflows by analyzing execution telemetry — even when the system does not explicitly crash.
 
 ---
 
-## 🎯 Core Idea
+## 🏗️ Architectural Pillars
 
-> *Treat agent execution as a behavioral system, not just a prompt pipeline.*
+This project demonstrates professional system design for productionizing Large Language Models (LLMs):
 
-Instead of validating outputs, this project monitors:
+- **🤖 Deterministic AI Orchestration (LangGraph):** LLM workflows are modeled as state machines. If an agent loops indefinitely, the system deterministically forces an "Agentic Healing" intervention rather than crashing.
+- **⚡ Resilience & Cost Engineering:** Implements **Exponential Backoff** (via `tenacity`) for API rate limits and **Semantic Caching** (via `Redis` + embeddings) to bypass the LLM for previously seen reasoning paths, cutting cloud costs by up to 90%.
+- **📊 Observability & Telemetry:** Every agentic decision, retry, confidence score, and latency tick is asynchronously streamed into a **TimescaleDB** time-series database for population-level drift analysis.
+- **🛠️ Enterprise DevOps:** Fully decoupled microservice architecture (FastAPI, Streamlit UI, Background Worker, Redis, Postgres). Includes a complete **GitHub Actions CI/CD** pipeline enforcing strict `mypy` typing and `ruff` linting.
 
-* Execution paths
-* Retry patterns
-* Step ordering
-* Decision instability
-* Semantic bias (escalation & classification)
-
-This allows early detection of **autonomy degradation** — and automatic correction.
+> **Read the full System Design specifications in our [ARCHITECTURE.md](ARCHITECTURE.md) and [DATA_MODEL.md](docs/DATA_MODEL.md).**
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏥 OncoLLM Clinical Workflows (PRISM & SYMPHONY)
 
-```
-Incident Trigger
-      ↓
-LangGraph State Machine Engine
-      ↓
-LLM-Powered Agent Nodes (Triage → Investigation → Decision → Notification)
-      ↓                             ↑
-      └──── Drift Loop? ────→ Intervention (Agentic Healing)
-      ↓
-Execution Telemetry (SQLite)
-      ↓
-Drift Detection Engine
-      ↓
-Webhook Alerting (Slack / Discord) + Streamlit Dashboard
-```
+Beyond IT incident triage, this repository features a sophisticated **Oncology Data Extraction Pipeline** based on the "Constellation" agent architecture, designed for proactive trial matching (PRISM) and longitudinal summarization (SYMPHONY).
 
-Each layer has a **single responsibility**, making the system observable, extensible, and self-healing.
+1. **Pillar 1: Constellation Router:** An intelligent routing layer that classifies clinical notes (`pathology_report`, `radiology`, `genomics`) to select optimized downstream prompts.
+2. **Pillar 2: Guideline-Grounded RAG:** In-process ChromaDB vector store seeded with NCI/AJCC 8th Edition staging criteria to ground the LLM's diagnostic reasoning and prevent staging hallucinations.
+3. **Pillar 3: Specialized Prompt Library:** Highly optimized few-shot prompt factories that enforce strict clinical reasoning. Every extracted biomarker or staging fact must include an `evidence_span` exactly matching the raw note.
+4. **Pillar 4: Self-Correction Evaluator Loop:** A deterministic LangGraph critic node that audits extraction outputs, rejecting hallucinations and forcing re-extraction if evidence provenance checks fail.
+5. **Live Trial Matching:** Dynamically queries the **ClinicalTrials.gov API v2** to recommend recruiting trials based on the patient's exact histological and biomarker profile.
 
 ---
 
-## 🤖 Agentic Workflow
+## 🚀 Quickstart (Docker Compose)
 
-The incident triage workflow consists of autonomous nodes managed by LangGraph:
+The entire enterprise architecture is containerized. You can spin up the FastAPI backend, Streamlit Dashboard, Background ML Worker, Redis, and TimescaleDB with a single command.
 
-1. **Triage Node**
-   * Uses **ChatOpenAI (gpt-3.5-turbo)** to classify incident severity
-   * Falls back to weighted simulation if no API key is configured
-
-2. **Investigation Node**
-   * Gathers contextual evidence from the incident state
-
-3. **Decision Node**
-   * Uses **ChatOpenAI** to decide: `escalate` or `auto_resolve`
-   * Returns a confidence score between 0.0 and 1.0
-
-4. **Intervention Node** *(Agentic Healing)*
-   * Triggered automatically if retry_count ≥ 2 (persistent drift loop detected)
-   * Forces the agent back to a stable, deterministic decision
-   * Prevents infinite loops without crashing the workflow
-
-5. **Notification Node**
-   * Communicates outcomes
-   * Triggers webhook alerts on drift events
-
----
-
-## 🏥 Clinical RWE & HCC Coding Pipeline
-
-Beyond IT incidents, this project features a parallel **Clinical Data Extraction Pipeline** designed to overcome LLM hallucinations and Medicare RADV audit risks in Real-World Evidence (RWE) generation.
-
-### The Agentic Workflow
-1. **Bayesian Ensemble NER:** Combines LLMs, deterministic regex, and NLM APIs with Bayesian posterior probabilities to extract medical entities with high recall and precision.
-2. **Context Pre-Processor:** Identifies if conditions are negated or belong to family members to stop temporal and experiencer hallucinations.
-3. **Disambiguation & Ontology Router:** Maps validated entities to current ICD-10 codes and CMS Hierarchical Condition Categories (HCC).
-4. **MEAT Validation Sub-Agent (Audit-Proofing):** 
-   * A secondary deterministic agent ensures every extracted condition is backed by cryptographic proof of clinical action (**M**onitored, **E**valuated, **A**ssessed, **T**reated).
-   * If MEAT is verified, it outputs the exact text snippet and applies the CMS Risk Adjustment Factor (RAF) weight.
-   * If MEAT fails, it zeroes out the financial weight to **prevent RADV audit penalties**.
-
----
-
-## 📡 Telemetry & Observability
-
-Each execution emits telemetry including:
-
-* Step name, execution order, retry count, path taken
-* Execution latency (ms)
-* Drift score and risk level
-
-Telemetry is stored in a **SQLite database** enabling:
-
-* Population-level baseline calculations
-* Categorical rate tracking (Escalation Rate, High-Severity Rate)
-* Live visualization in the Streamlit dashboard
-
----
-
-## 🚨 Drift & Bias Detection
-
-Drift is defined as **deviation from historically stable behavior**, not explicit failure.
-
-The drift engine detects:
-
-| Signal | Trigger |
-|---|---|
-| **Retry Drift** | Retry count exceeds historical average |
-| **Step Count Drift** | More steps than the historical norm |
-| **Latency Drift** | Execution time > 1.5× the historical average |
-| **Escalation Bias** | Agent escalates a low-severity incident against historical norms |
-| **Classification Bias** | Agent over-classifies incidents as high-severity |
-
----
-
-## 🩹 Agentic Healing
-
-When the system detects a **persistent retry loop** (retry_count ≥ 2 with low confidence), the LangGraph conditional edge routes to the `intervention` node which:
-
-1. Logs the healing event
-2. Forcibly resets confidence to a stable value
-3. Sets the decision to `escalate` (safest action under uncertainty)
-4. Passes control cleanly to the notification node
-
-This transforms the detector from **passive observer** to **active guardian**.
-
----
-
-## 🛠️ Tech Stack
-
-* **Python** — core language
-* **LangGraph** — deterministic state machine orchestration
-* **LangChain + OpenAI** — real LLM-powered triage and decision nodes (optional, with simulation fallback)
-* **SQLite** — population-level telemetry persistence
-* **Streamlit** — live telemetry visualization dashboard
-* **Slack / Discord Webhooks** — real-time drift alerts
-* **pytest** — automated test suite (8 tests)
-
----
-
-## 🚀 Running the Project
-
-### 1. Install dependencies
+### 1. Configure Environment
 ```bash
+cp .env.example .env
+```
+*(Optionally, add your `GOOGLE_API_KEY` for real Gemini LLM reasoning. If omitted, the system falls back to a weighted local simulation).*
+
+### 2. Launch the Microservices
+```bash
+docker compose up --build -d
+```
+
+### 3. Access the Platforms
+- **Streamlit Analytics Dashboard:** [http://localhost:8501](http://localhost:8501)
+- **FastAPI Interactive Docs (Swagger):** [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### 4. Seed Demo Telemetry
+To populate the dashboard with realistic drift anomalies and clinical data without waiting days for telemetry:
+```bash
+docker compose exec api python scripts/seed_demo_data.py
+```
+
+---
+
+## 💻 Local Development
+
+If you prefer to run the system natively (without Docker) for debugging or contributing:
+
+```bash
+# 1. Install strict dependencies
 pip install -r requirements.txt
-```
 
-### 2. Configure environment (optional)
-Create a `.env` file:
-```env
-# Optional — enables real LLM reasoning
-OPENAI_API_KEY=sk-...
+# 2. Run the FastAPI backend
+python -m uvicorn api.main:app --reload
 
-# Optional — enables real-time Slack alerts
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
-
-# Optional — enables real-time Discord alerts
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-```
-
-> If no API key is provided, the workflow runs in **simulation mode** automatically.
-
-### 3. Build a healthy baseline
-```bash
-python run.py --simulate-batch 60
-```
-
-### 4. Run a single execution (or trigger biased simulation)
-```bash
-# Normal run (rich terminal output)
-python run.py
-
-# Trigger classification + escalation bias
-python run.py --bias
-
-# Suppress webhook alerts (useful in CI)
-python run.py --no-alerts
-
-# Wipe the telemetry database and start fresh
-python run.py --clear
-```
-
-### 4.5 Run the Clinical Pipeline
-```bash
-python clinical/run_clinical.py
-```
-
-### 5. Launch the Streamlit dashboard
-```bash
+# 3. In a separate terminal, launch the Dashboard
 streamlit run dashboard.py
 ```
 
-### 6. Run the test suite
+### CI/CD Checks
+Before opening a PR, ensure your code passes our static analysis gates:
 ```bash
-# Full suite with coverage report
+python -m ruff check .
+python -m mypy .
 pytest
-
-# Quick run (no coverage)
-pytest --no-cov
 ```
 
-
-
 ---
 
-## 🧪 Test Suite
+## 🚨 Understanding "Agentic Drift"
 
-| Test | Description |
-|---|---|
-| `test_escalation_bias_anomalous` | Verifies +25 penalty for anomalous low-severity escalation |
-| `test_escalation_bias_normal` | Verifies zero penalty for healthy auto-resolution |
-| `test_classification_bias_anomalous` | Verifies +20 penalty for anomalous high-severity classification |
-| `test_latency_drift_high` | Verifies max latency penalty for severe degradation |
-| `test_step_count_drift` | Verifies step count penalty calculation |
-| `test_workflow_healthy_auto_resolve` | Integration: healthy path → auto_resolve |
-| `test_workflow_low_confidence_single_retry` | Integration: one retry, no intervention |
-| `test_workflow_intervention_on_drift_loop` | Integration: drift loop triggers healing node |
+Modern LLM workflows rarely fail loudly; instead, they silently degrade:
+- Escalation bias (agents become overly cautious)
+- Rising retry loops and latency
+- Hallucinated context retention
 
----
-
-## 🔮 Roadmap
-
-* Multi-incident workflow support
-* LangSmith trace integration
-* ML-based anomaly detection (replacing rule-based signals)
-* Cloud deployment (Cloud Run)
-
----
-
-## 👤 Author
-
-Built as a systems-level exploration of **agentic AI reliability, observability, autonomy drift, and self-healing**.
-
-This project emphasizes **engineering judgment over demos**.
+The **Agentic Drift Detector** identifies this drift mathematically. When it detects an anomaly (e.g., *Retry count exceeds historical average by 2σ*), it alerts human operators and triggers deterministic circuit breakers.
 
 ---
 
 ## 📜 License
-
-MIT
+MIT License. Built for technical exploration of Agentic AI reliability.

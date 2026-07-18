@@ -1,0 +1,78 @@
+COLORECTAL CANCER STAGING — NCI/AJCC 8TH EDITION SUMMARY
+
+SOURCE: National Cancer Institute PDQ; AJCC Cancer Staging Manual 8th Edition
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRIMARY TUMOR (T)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Tx:  Primary tumor cannot be assessed.
+T0:  No evidence of primary tumor.
+Tis: Carcinoma in situ — intramucosal carcinoma (invasion of lamina propria only).
+T1:  Tumor invades the submucosa (through the muscularis mucosa but not into the muscularis propria).
+T2:  Tumor invades the muscularis propria.
+T3:  Tumor invades through the muscularis propria into pericolorectal tissues.
+T4:  Tumor invades the visceral peritoneum or invades or adheres to adjacent organ or structure.
+  T4a: Tumor invades through the visceral peritoneum (including gross perforation of the bowel through tumor, and continuous invasion of tumor through areas of inflammation to the surface of the visceral peritoneum).
+  T4b: Tumor directly invades or adheres to adjacent organs or structures.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGIONAL LYMPH NODES (N)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+N0:  No regional lymph node metastasis.
+N1:  Metastasis in 1–3 regional lymph nodes; OR any number of tumor deposits present and all identifiable lymph nodes are negative.
+  N1a: Metastasis in 1 regional lymph node
+  N1b: Metastasis in 2–3 regional lymph nodes
+  N1c: No regional lymph node metastasis, but tumor deposit(s) in the subserosa, mesentery, or non-peritonealized pericolic or perirectal/mesorectal tissues
+N2:  Metastasis in ≥ 4 regional lymph nodes.
+  N2a: Metastasis in 4–6 regional lymph nodes
+  N2b: Metastasis in ≥ 7 regional lymph nodes
+
+DISTANT METASTASIS (M):
+M0: No distant metastasis.
+M1a: Metastasis to one site or organ without peritoneal metastasis.
+M1b: Metastasis to ≥ 2 sites or organs without peritoneal metastasis.
+M1c: Metastasis to the peritoneal surface alone or with other site or organ metastases.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STAGE GROUPS (COLORECTAL CANCER)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Stage 0:   Tis N0 M0
+Stage I:   T1 N0 M0; T2 N0 M0
+Stage IIA: T3 N0 M0
+Stage IIB: T4a N0 M0
+Stage IIC: T4b N0 M0
+Stage IIIA: T1-T2 N1/N1c M0; T1 N2a M0
+Stage IIIB: T3-T4a N1/N1c M0; T2-T3 N2a M0; T1-T2 N2b M0
+Stage IIIC: T4a N2a M0; T3-T4a N2b M0; T4b N1-N2 M0
+Stage IVA: Any T, Any N, M1a
+Stage IVB: Any T, Any N, M1b
+Stage IVC: Any T, Any N, M1c
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KEY BIOMARKERS FOR COLORECTAL CANCER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RAS/RAF Mutations (Predictive — anti-EGFR therapy):
+  KRAS exons 2, 3, 4 (codons 12, 13, 59, 61, 117, 146): Mutant RAS predicts RESISTANCE to cetuximab/panitumumab.
+  NRAS exons 2, 3, 4: Same as KRAS.
+  BRAF V600E mutation: Predicts poor prognosis; encorafenib + cetuximab approved in second-line mCRC (BEACON trial).
+  RAS/RAF wild-type: Eligible for anti-EGFR antibody therapy (cetuximab or panitumumab).
+
+Mismatch Repair / Microsatellite Status:
+  dMMR (Mismatch Repair Deficient) / MSI-H (Microsatellite Instability High):
+    - Detected by IHC (loss of MLH1, PMS2, MSH2, or MSH6 expression) or PCR/NGS.
+    - Predicts benefit from immune checkpoint inhibitors.
+    - Pembrolizumab: FDA-approved first-line for dMMR/MSI-H mCRC.
+    - Nivolumab + ipilimumab: FDA-approved for dMMR/MSI-H mCRC.
+    - Lynch Syndrome: Germline MMR gene mutation — family counseling indicated.
+  pMMR / MSS (Microsatellite Stable): Does NOT benefit from single-agent checkpoint inhibitor therapy.
+
+HER2 Amplification: Present in ~5% of colorectal cancers, enriched in RAS/BRAF wild-type tumors.
+  HER2-amplified mCRC: Trastuzumab + tucatinib (MOUNTAINEER trial); or trastuzumab + lapatinib.
+
+NTRK Fusion: Entrectinib or larotrectinib (pan-tumor, tissue-agnostic).
+
+PIK3CA mutation: Aspirin use may improve outcomes (investigational).
