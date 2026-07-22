@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
-FROM python:3.11-slim
+# Harbor Compliance: Pinned to exact patch version for reproducibility.
+# To update: test with newer tag first, then update this line.
+FROM python:3.11.9-slim-bookworm
 
 LABEL org.opencontainers.image.title="Agentic Drift Detector — Worker"
 LABEL org.opencontainers.image.description="Background telemetry queue drain worker"

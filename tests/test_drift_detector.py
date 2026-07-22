@@ -7,6 +7,12 @@ from drift.drift_detector import (
     retry_drift
 )
 
+# ── Harbor Compliance Note ────────────────────────────────────────────────────
+# Structural checks guard against key-deletion exploits (Challenge 4).
+# NOP test (test_nop_empty_state_must_not_be_healthy) verifies that a
+# completely empty/zero state is not silently passed as "healthy".
+# ─────────────────────────────────────────────────────────────────────────────
+
 @pytest.fixture
 def healthy_baseline():
     return {
@@ -118,7 +124,54 @@ def test_empty_db_drift_scoring_does_not_crash():
 
     result = analyze_workflow(state)
 
+    # ── Structural Check (Harbor: Challenge 4) ─────────────────────────────
+    # Validate the full key structure of the analysis result exists BEFORE
+    # checking individual values, preventing the structural-deletion exploit.
+    EXPECTED_ANALYSIS_KEYS = {"drift_score", "risk_level"}
+    missing_keys = EXPECTED_ANALYSIS_KEYS - set(result.keys())
+    assert not missing_keys, (
+        f"Structural check failed: analysis result is missing keys {missing_keys}."
+    )
+    # ─────────────────────────────────────────────────────────────────────────
+
     assert "drift_score" in result
     assert "risk_level" in result
     assert result["risk_level"] in ("healthy", "drift_detected", "high_risk")
     assert isinstance(result["drift_score"], int)
+
+
+def test_nop_empty_state_must_not_be_healthy():
+    """
+    Harbor NOP Test (Challenge 3 — Weak Verification).
+
+    Simulates a NOP agent that submits a completely hollow/zeroed-out state.
+    The drift analyzer must NOT classify this as "healthy". If it does,
+    the verifier has a NOP-pass bug: doing nothing passes the benchmark.
+
+    A zero-step, zero-latency, zero-retry "ghost" execution should never
+    be awarded a clean bill of health by a correctly written verifier.
+    """
+    from drift.drift_detector import analyze_workflow
+
+    # NOP state: agent did nothing, all values are empty/zero
+    nop_state = {
+        "incident_id": "nop-test-ghost",
+        "severity": "high",         # High severity incident
+        "decision": "auto_resolve",  # Claimed to auto-resolve with no work
+        "confidence": 0.0,
+        "step_count": 0,             # No steps taken
+        "retry_count": 0,
+        "path_taken": [],            # No path recorded
+        "execution_time_ms": 0,      # Zero latency = no work done
+    }
+
+    result = analyze_workflow(nop_state)
+
+    # A ghost execution (0 steps, 0 latency, empty path) auto-resolving a
+    # high-severity incident should trigger at least some drift signal.
+    # If risk_level is "healthy" here, the verifier is too weak (NOP passes).
+    assert result["risk_level"] != "healthy", (
+        "NOP FAILURE: A zero-step, zero-latency ghost state was classified as "
+        "'healthy'. The verifier must detect this as anomalous drift, not a "
+        "valid resolution. The verifier is too weak."
+    )

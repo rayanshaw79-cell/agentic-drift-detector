@@ -35,8 +35,10 @@ def clinical_output_step(state: ClinicalState) -> dict:
     start = time.perf_counter()
 
     record    = state.get("clinical_record") or {}
-    status    = state.get("coding_status", "unknown")
-    confidence = state.get("overall_confidence", 0.0)
+    status    = state.get("coding_status", "unknown") or "unknown"
+    # Coerce None explicitly — state.get() default is bypassed when key exists
+    # with value None (e.g., when LLM extraction fails completely).
+    confidence = state.get("overall_confidence") or 0.0
     codes     = state.get("icd10_codes") or []
 
     if HAS_RICH:
@@ -67,7 +69,7 @@ def clinical_output_step(state: ClinicalState) -> dict:
         console.print()
     else:
         log.info("[CLINICAL OUTPUT] Status: %s | Confidence: %.2f | Codes: %d",
-                 status, confidence, len(codes))
+                 status, confidence or 0.0, len(codes))
         log.info("[CLINICAL OUTPUT] Record: %s", json.dumps(record, indent=2))
 
     latency = int((time.perf_counter() - start) * 1000) + 10
