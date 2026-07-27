@@ -725,6 +725,376 @@ if "sdoh_risk_label" in df.columns and "sdoh_risk_score" in df.columns:
             else:
                 st.info("No records with SHAP explanations found.")
 
+# ── Human-in-the-Loop Clinical Review Portal ─────────────────────────────────
+if IS_CLINICAL:
+    st.markdown("---")
+    st.markdown(
+        "<div class='section-title'>⚕️ Human-in-the-Loop Clinical Review Portal</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Interactive clinical override & audit interface for records marked `requires_clinical_review`.")
+
+    try:
+        from telemetry.store import get_pending_reviews, get_review_history, save_human_intervention, update_execution_human_status
+        pending_list = get_pending_reviews(limit=50)
+        history_list = get_review_history(limit=50)
+
+        review_tab1, review_tab2 = st.tabs([f"📥 Pending Queue ({len(pending_list)})", f"📜 Review Audit History ({len(history_list)})"])
+
+        with review_tab1:
+            if pending_list:
+                rec_ids = [p["incident_id"] for p in pending_list]
+                selected_rec_id = st.selectbox("Select Flagged Record to Review", rec_ids)
+                selected_p = next(p for p in pending_list if p["incident_id"] == selected_rec_id)
+
+                col_rev1, col_rev2 = st.columns([1, 1])
+
+                with col_rev1:
+                    st.markdown("#### Record Summary")
+                    st.json({
+                        "Record ID": selected_p["incident_id"],
+                        "Decision": selected_p["decision"],
+                        "Retry Count": selected_p.get("retry_count", 0),
+                        "Confidence": selected_p.get("overall_confidence", 0.0),
+                        "SDOH Risk Label": selected_p.get("sdoh_risk_label", "N/A"),
+                        "Created At": selected_p.get("created_at", "N/A")
+                    })
+
+                with col_rev2:
+                    st.markdown("#### Clinician Override Action")
+                    action_choice = st.radio("Review Action", ["approved", "edited", "rejected"], horizontal=True)
+                    clinician_name = st.text_input("Clinician Identifier", value="Dr. Alex Taylor")
+                    review_notes = st.text_area("Clinical Notes & Rationale", placeholder="Provide clinical justification for code approval or override...")
+                    custom_codes_input = st.text_input("Final ICD-10 Codes (comma-separated if editing)", value="E11.9, I10")
+
+                    if st.button("💾 Submit Clinical Review", type="primary", use_container_width=True):
+                        # Parse custom codes
+                        parsed_codes = [{"code": c.strip(), "description": "Clinician Override"} for c in custom_codes_input.split(",") if c.strip()]
+                        
+                        new_status = "approved_by_clinician" if action_choice in ("approved", "edited") else "rejected_by_clinician"
+                        
+                        save_human_intervention(
+                            incident_id=selected_rec_id,
+                            action=action_choice,
+                            reviewed_by=clinician_name,
+                            notes=review_notes,
+                            original_codes=[],
+                            final_codes=parsed_codes
+                        )
+                        update_execution_human_status(
+                            record_id=selected_rec_id,
+                            new_status=new_status,
+                            human_action=action_choice,
+                            notes=review_notes,
+                            reviewed_by=clinician_name,
+                            final_codes=parsed_codes
+                        )
+                        st.toast(f"✅ Record '{selected_rec_id}' updated to {new_status}!")
+                        st.cache_data.clear()
+                        st.rerun()
+            else:
+                st.success("🎉 No pending records requiring clinical review. All extraction models operating within bounds.")
+
+        with review_tab2:
+            if history_list:
+                hist_df = pd.DataFrame(history_list)
+                st.dataframe(
+                    hist_df[["incident_id", "action", "reviewed_by", "notes", "created_at"]],
+                    use_container_width=True
+                )
+            else:
+                st.info("No past human interventions recorded yet.")
+
+    except Exception as exc:
+        st.error(f"Error loading Clinical Review Portal: {exc}")
+
+# ── PRISM v2 Live Clinical Trial Matching Explorer ──────────────────────────
+if IS_CLINICAL:
+    st.markdown("---")
+    st.markdown(
+        "<div class='section-title'>🎯 PRISM v2 Live Clinical Trial Matching Engine</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Queries live recruiting studies on ClinicalTrials.gov API v2 and matches patient biomarkers and staging criteria.")
+
+    col_t1, col_t2 = st.columns([3, 1])
+    with col_t1:
+        search_condition = st.text_input("Search Condition / Histology", value="Non-Small Cell Lung Cancer")
+    with col_t2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        search_btn = st.button("🔎 Fetch Live Trials", type="primary", use_container_width=True)
+
+    try:
+        from clinical.tools.clinical_trials_api import search_recruiting_trials
+        trials_list = search_recruiting_trials(condition=search_condition, limit=4)
+
+        if trials_list:
+            t_cols = st.columns(len(trials_list))
+            for idx, trial in enumerate(trials_list):
+                with t_cols[idx]:
+                    st.markdown(
+                        f"""
+                        <div style="background:#161b22;border:1px solid #2d3348;border-radius:10px;padding:14px;height:100%;">
+                            <span class="badge badge-healthy">{trial.get('phase', 'PHASE2')}</span>
+                            <div style="font-weight:700;color:#58a6ff;font-size:14px;margin-top:6px;">{trial['nct_id']}</div>
+                            <div style="font-size:12px;color:#e6edf3;font-weight:600;margin:6px 0;line-height:1.3;">{trial['brief_title'][:65]}...</div>
+                            <div style="font-size:11px;color:#8b949e;">Sponsor: <b>{trial.get('sponsor', 'Academic')}</b></div>
+                            <div style="font-size:11px;color:#3fb950;margin-top:8px;font-weight:600;">Eligible Range: 18+ Yrs · {trial.get('gender', 'ALL')}</div>
+                            <a href="{trial['url']}" target="_blank" style="display:inline-block;margin-top:10px;font-size:12px;color:#bc8cff;text-decoration:none;font-weight:600;">🔗 View Study on ClinicalTrials.gov →</a>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+        else:
+            st.info("No recruiting trials found for this condition.")
+    except Exception as exc:
+        st.error(f"Error fetching live clinical trials: {exc}")
+
+# ── Pharmacovigilance & Drug Safety Scanner ────────────────────────────────
+if IS_CLINICAL:
+    st.markdown("---")
+    st.markdown(
+        "<div class='section-title'>💊 Pharmacovigilance & Drug Safety Scanner</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Scans medication regimens for NLM RxNav high-severity drug interactions and extracts unstructured Adverse Drug Reaction (ADR) signals.")
+
+    col_p1, col_p2 = st.columns([2, 1])
+
+    with col_p1:
+        med_input = st.text_input("Prescribed Medications (comma-separated)", value="Warfarin, Aspirin, Keytruda")
+        adr_note_input = st.text_area("Patient Symptoms / Clinical Note (for ADR signal extraction)", value="Patient reports epistaxis and severe skin rash after starting Keytruda 10 days ago.")
+
+    with col_p2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        scan_btn = st.button("🛡️ Run Safety Scan", type="primary", use_container_width=True)
+
+    try:
+        from clinical.tools.pharmacovigilance_api import check_drug_interactions
+        from clinical.steps.pharmacovigilance_step import _extract_adverse_reactions, _compute_safety_risk
+
+        med_list = [m.strip() for m in med_input.split(",") if m.strip()]
+        interactions = check_drug_interactions(med_list) if len(med_list) >= 2 else []
+        adrs = _extract_adverse_reactions(adr_note_input, med_list)
+        overall_risk = _compute_safety_risk(interactions, adrs)
+
+        risk_color_map = {"low": "#3fb950", "moderate": "#d29922", "high": "#f85149", "critical": "#ff0000"}
+
+        st.markdown(
+            f"<div style='font-size:14px;color:#e6edf3;margin-bottom:12px;'>"
+            f"Overall Safety Risk: <b style='color:{risk_color_map.get(overall_risk, '#ffffff')}'>{overall_risk.upper()}</b>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+        col_out1, col_out2 = st.columns(2)
+
+        with col_out1:
+            st.markdown("##### ⚠️ Drug-Drug Interactions")
+            if interactions:
+                for inter in interactions:
+                    st.markdown(
+                        f"""
+                        <div class="alert-item">
+                            <div class="alert-id">⚡ {inter['pair']}</div>
+                            <div class="alert-meta">{inter['description']}</div>
+                            <div style="font-size:10px;color:#8b949e;margin-top:4px;">Source: {inter['source']}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+            else:
+                st.success("No severe drug-drug interactions detected.")
+
+        with col_out2:
+            st.markdown("##### 🩺 Extracted ADR Signals")
+            if adrs:
+                for adr in adrs:
+                    st.markdown(
+                        f"""
+                        <div class="alert-item-drift">
+                            <div class="alert-id">🚩 {adr['category']}: {adr['symptom']}</div>
+                            <div class="alert-meta">Suspected Drug: <b>{adr['suspected_drug']}</b> · Evidence: <i>"{adr['evidence_span']}"</i></div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+            else:
+                st.info("No adverse drug reaction signals detected in note text.")
+
+    except Exception as exc:
+        st.error(f"Error running pharmacovigilance scan: {exc}")
+
+# ── CMS Financial RAF & RADV Audit Scorecard ────────────────────────────────
+if IS_CLINICAL:
+    st.markdown("---")
+    st.markdown(
+        "<div class='section-title'>📊 CMS Financial RAF & RADV Audit Scorecard</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Calculates patient Risk Adjustment Factor (RAF) scores and audits Medicare RADV financial clawback exposure ($ USD) for missing MEAT documentation.")
+
+    try:
+        from clinical.tools.raf_audit_calculator import calculate_raf_audit_metrics
+
+        sample_codes_for_audit = [
+            {"code": "E11.40", "description": "Type 2 diabetes with diabetic neuropathy", "hcc_category": "HCC 18", "raf_weight": 0.368, "meat_met": True},
+            {"code": "I50.9", "description": "Heart failure, unspecified", "hcc_category": "HCC 85", "raf_weight": 0.323, "meat_met": True},
+            {"code": "J44.9", "description": "Chronic obstructive pulmonary disease, unspecified", "hcc_category": "HCC 111", "raf_weight": 0.335, "meat_met": False},
+        ]
+
+        raf_metrics = calculate_raf_audit_metrics(sample_codes_for_audit, {"age": 74, "gender": "M"})
+
+        raf_col1, raf_col2, raf_col3, raf_col4 = st.columns(4)
+        with raf_col1:
+            metric_card(raf_col1, "Total Patient RAF", f"{raf_metrics['total_raf_score']:.3f}", sub="Base Demo + Disease")
+        with raf_col2:
+            metric_card(raf_col2, "Verified Compliant RAF", f"{raf_metrics['verified_raf_score']:.3f}", sub="MEAT Proof Present")
+        with raf_col3:
+            metric_card(raf_col3, "Unverified RAF Risk", f"{raf_metrics['unverified_raf_score']:.3f}", sub="Missing MEAT Proof")
+        with raf_col4:
+            metric_card(raf_col4, "RADV Audit Exposure", f"${raf_metrics['radv_financial_exposure_usd']:,.2f}", sub="Annual Clawback Risk")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("##### 📋 RADV Code Compliance Audit Detail")
+        audit_df = pd.DataFrame(raf_metrics["code_audit_details"])
+        st.dataframe(audit_df, use_container_width=True)
+
+    except Exception as exc:
+        st.error(f"Error loading CMS RAF & RADV Audit Scorecard: {exc}")
+
+# ── SYMPHONY v2 Longitudinal Disease Timeline & RECIST 1.1 Tracker ────────────
+if IS_CLINICAL:
+    st.markdown("---")
+    st.markdown(
+        "<div class='section-title'>📜 SYMPHONY v2 Longitudinal Patient Timeline & RECIST 1.1 Tracker</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Synthesizes multi-visit patient notes into chronological timelines and tracks serial radiology target lesion diameters per RECIST 1.1 standards.")
+
+    try:
+        from clinical.tools.symphony_engine import synthesize_patient_timeline
+
+        sample_visit_history = [
+            {"date": "2025-10-10", "doc_type": "Baseline CT Scan", "summary": "Right upper lobe lung lesion measuring 45mm. EGFR exon 19 deletion detected.", "target_lesion_mm": 45.0, "new_lesions": False},
+            {"date": "2026-02-14", "doc_type": "Follow-up CT #1", "summary": "Partial response observed after Osimertinib therapy. Primary lesion reduced to 30mm (-33.3%).", "target_lesion_mm": 30.0, "new_lesions": False},
+            {"date": "2026-07-01", "doc_type": "Follow-up CT #2", "summary": "Continued response. Primary target lesion further decreased to 22mm (-51.1% from baseline). No new metastases.", "target_lesion_mm": 22.0, "new_lesions": False},
+        ]
+
+        sym_res = synthesize_patient_timeline(sample_visit_history)
+
+        sym_col1, sym_col2 = st.columns([1, 2])
+
+        with sym_col1:
+            st.markdown(
+                f"""
+                <div style="background:#161b22;border:1px solid #2d3348;border-radius:10px;padding:16px;margin-bottom:12px;">
+                    <div style="font-size:12px;color:#8b949e;text-transform:uppercase;font-weight:600;">RECIST 1.1 Overall Response</div>
+                    <div style="font-size:28px;font-weight:800;color:#3fb950;margin:6px 0;">{sym_res['recist_overall_response']} (PARTIAL RESPONSE)</div>
+                    <div style="font-size:13px;color:#e6edf3;">Target Lesion Change: <b style="color:#3fb950;">{sym_res['recist_delta_pct']:+.1f}%</b></div>
+                    <div style="font-size:11px;color:#8b949e;margin-top:8px;">{sym_res['pre_chart_summary']}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with sym_col2:
+            st.markdown("##### 📈 Serial Target Lesion Trajectory (mm)")
+            measures_df = pd.DataFrame(sym_res["serial_measurements"])
+            fig_lesion = px.line(
+                measures_df,
+                x="date",
+                y="target_lesion_mm",
+                markers=True,
+                labels={"target_lesion_mm": "Lesion Sum (mm)", "date": "Scan Date"},
+                title="Target Lesion Diameter Over Time (RECIST 1.1)"
+            )
+            fig_lesion.update_traces(line_color="#3fb950", marker_size=10)
+            fig_lesion.update_layout(
+                template="plotly_dark",
+                height=220,
+                margin=dict(l=20, r=20, t=30, b=20),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_lesion, use_container_width=True)
+
+        st.markdown("##### 🗓️ Chronological Patient Visit Timeline")
+        timeline_cols = st.columns(len(sym_res["chronological_timeline"]))
+        for idx, visit_item in enumerate(sym_res["chronological_timeline"]):
+            with timeline_cols[idx]:
+                st.markdown(
+                    f"""
+                    <div style="background:#161b22;border:1px solid #2d3348;border-radius:10px;padding:12px;height:100%;">
+                        <div style="font-weight:700;color:#58a6ff;font-size:13px;">📅 {visit_item['date']}</div>
+                        <div style="font-size:11px;color:#bc8cff;font-weight:600;">{visit_item['doc_type']}</div>
+                        <div style="font-size:12px;color:#e6edf3;margin-top:6px;line-height:1.3;">{visit_item['summary']}</div>
+                        <div style="font-size:11px;color:#3fb950;margin-top:8px;font-weight:600;">Lesion: {visit_item['target_lesion_mm']} mm</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+    except Exception as exc:
+        st.error(f"Error loading SYMPHONY v2 Longitudinal Engine: {exc}")
+
+# ── SMART-on-FHIR R4 Adapter & Synthetic Patient Generator ────────────────────
+if IS_CLINICAL:
+    st.markdown("---")
+    st.markdown(
+        "<div class='section-title'>🔥 SMART-on-FHIR R4 Adapter &amp; Synthetic Patient Generator</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Exports extracted clinical state objects to HL7 FHIR R4 JSON Bundles (Patient, Condition, MedicationStatement, Observation) and generates synthetic patient charts.")
+
+    fhir_col1, fhir_col2 = st.columns([1, 1])
+
+    with fhir_col1:
+        st.markdown("##### 🎲 Synthetic Patient Chart Generator")
+        synth_condition = st.text_input("Oncology Condition", value="Non-Small Cell Lung Cancer", key="synth_cond")
+        if st.button("✨ Seed Synthetic Patient Record", type="primary", use_container_width=True):
+            try:
+                from clinical.tools.fhir_adapter import generate_synthetic_patient_chart
+                synth_data = generate_synthetic_patient_chart(synth_condition)
+                st.session_state["active_synth_chart"] = synth_data
+                st.success(f"Generated patient {synth_data['patient_id']} ({synth_data['demographics']['age']}yo {synth_data['demographics']['gender']})")
+            except Exception as exc:
+                st.error(f"Error seeding synthetic patient chart: {exc}")
+
+        if "active_synth_chart" in st.session_state:
+            active_p = st.session_state["active_synth_chart"]
+            st.text_area("Generated Synthetic Note Text", value=active_p["raw_note"], height=160)
+
+    with fhir_col2:
+        st.markdown("##### 📦 HL7 FHIR R4 Bundle Exporter")
+        try:
+            from clinical.tools.fhir_adapter import export_clinical_state_to_fhir
+            sample_state_for_fhir = {
+                "record_id": "FHIR-DEMO-001",
+                "demographics": {"age": 68, "gender": "M"},
+                "icd10_codes": [
+                    {"code": "C34.11", "description": "Malignant neoplasm of upper lobe, right bronchus or lung", "hcc_category": "HCC 12", "meat_met": True},
+                    {"code": "E11.40", "description": "Type 2 diabetes with diabetic neuropathy", "hcc_category": "HCC 18", "meat_met": True}
+                ],
+                "extracted_medications": [
+                    {"drug_name": "Osimertinib", "rxcui": "1730058"},
+                    {"drug_name": "Warfarin", "rxcui": "11289"}
+                ],
+                "sdoh_risk_label": "moderate",
+                "total_raf_score": 0.852
+            }
+            demo_fhir_bundle = export_clinical_state_to_fhir(sample_state_for_fhir)
+            st.json(demo_fhir_bundle, expanded=False)
+            st.download_button(
+                label="📥 Download HL7 FHIR R4 Bundle (JSON)",
+                data=json.dumps(demo_fhir_bundle, indent=2),
+                file_name="patient_fhir_r4_bundle.json",
+                mime="application/json",
+                use_container_width=True
+            )
+        except Exception as exc:
+            st.error(f"Error exporting FHIR Bundle: {exc}")
+
 # ── Footer ────────────────────────────────────────────────────────────────────
 backend_label = "PostgreSQL + TimescaleDB" if USE_POSTGRES else "SQLite"
 st.markdown(
@@ -732,3 +1102,9 @@ st.markdown(
     f"Built with LangGraph &amp; Streamlit &nbsp;·&nbsp; {backend_label}</div>",
     unsafe_allow_html=True,
 )
+
+
+
+
+
+

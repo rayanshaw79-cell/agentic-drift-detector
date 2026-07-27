@@ -1,7 +1,7 @@
 import operator
 from typing import TypedDict, Optional, List, Annotated
 
-class IncidentState(TypedDict):
+class IncidentState(TypedDict, total=False):
     # --- Identity ---
     incident_id: str
     incident_text: str

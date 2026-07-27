@@ -12,7 +12,7 @@ from typing import Optional, List, Annotated
 from typing import TypedDict
 
 
-class ClinicalState(TypedDict):
+class ClinicalState(TypedDict, total=False):
     # ── Identity ──────────────────────────────────────────────────────────────
     record_id: str
     raw_note: str                        # Unstructured clinical text input
@@ -42,9 +42,16 @@ class ClinicalState(TypedDict):
 
     # ── Final Output ──────────────────────────────────────────────────────────
     clinical_record: Optional[dict]      # Structured Python dict output
-    coding_status: Optional[str]         # "complete" | "requires_clinical_review"
+    coding_status: Optional[str]         # "complete" | "requires_clinical_review" | "approved_by_clinician"
     overall_confidence: Optional[float]  # Aggregate confidence across all codes
     claims_ready: Optional[bool]         # True if all codes are claims-submittable
+
+    # ── Human-in-the-Loop (HITL) Review Metadata ─────────────────────────────
+    human_review_action: Optional[str]   # "approved" | "edited" | "rejected" | "pending"
+    reviewed_by: Optional[str]           # Clinician identifier
+    reviewed_at: Optional[str]           # ISO timestamp string
+    human_notes: Optional[str]            # Clinician review notes / rationale
+    original_ai_codes: Optional[List[dict]] # Pre-human-override AI extraction snapshot
 
     # ── SDOH Population Health (Added during Clinical Unification) ────────────
     sdoh_risk_label: Optional[str]       # "low", "moderate", "high", "critical"
@@ -65,6 +72,27 @@ class ClinicalState(TypedDict):
     
     # ── Clinical Trial Matching (PRISM) ───────────────────────────────────────
     trial_matches: Optional[List[dict]]  # [{"nct_id": "NCT123", "match_confidence": 0.9, "evidence": "..."}]
+
+    # ── Pharmacovigilance & Drug Safety (Phase 2 Expansion) ───────────────────
+    extracted_medications: Optional[List[dict]]  # [{"drug_name": "Warfarin", "rxcui": "11289"}]
+    drug_interactions: Optional[List[dict]]      # [{"pair": "Warfarin + Aspirin", "severity": "high"}]
+    adverse_drug_reactions: Optional[List[dict]] # [{"category": "Hemorrhagic", "symptom": "Epistaxis"}]
+    drug_safety_risk: Optional[str]              # "low" | "moderate" | "high" | "critical"
+
+    # ── CMS Financial RAF & RADV Audit (Phase 3 Expansion) ────────────────────
+    total_raf_score: Optional[float]             # Aggregated demographic + disease RAF
+    verified_raf_score: Optional[float]          # MEAT-verified compliant RAF score
+    unverified_raf_score: Optional[float]        # Unverified RAF score lacking evidence
+    radv_financial_exposure_usd: Optional[float] # Estimated Medicare audit clawback ($ USD)
+    radv_audit_label: Optional[str]              # "low_audit_risk" | "moderate_audit_risk" | "high_radv_exposure"
+
+    # ── Longitudinal Reasoning & RECIST 1.1 (Phase 4 Expansion) ────────────────
+    longitudinal_timeline: Optional[List[dict]]   # Chronological visit summaries
+    recist_overall_response: Optional[str]        # "CR" | "PR" | "SD" | "PD" | "UNEVALUABLE"
+    lesion_measurements: Optional[List[dict]]     # Serial target lesion measurements (mm)
+
+    # ── SMART-on-FHIR R4 Adapter (Phase 5 Expansion) ─────────────────────────
+    fhir_bundle: Optional[dict]                  # HL7 FHIR R4 JSON Bundle object
 
     # ── Self-Correction Evaluator Loop (OncoLLM Pillar 4) ────────────────────
     eval_feedback: Optional[str]         # Evaluator's critique — injected into re-extraction prompt

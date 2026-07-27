@@ -77,11 +77,67 @@ def get_historical_metrics(
     In PostgreSQL mode the query is scoped to tenant_id (defaults to
     TENANT_ID env var). In SQLite mode tenant_id is ignored.
     """
-    if _USE_POSTGRES and tenant_id is None:
-        from config.tenant import get_current_tenant
-        tenant_id = get_current_tenant()
-
     kwargs = {}
     if tenant_id is not None:
         kwargs["tenant_id"] = tenant_id
     return _backend().get_historical_metrics(limit, **kwargs)
+
+
+def save_human_intervention(
+    incident_id: str,
+    action: str,
+    reviewed_by: str = "clinician",
+    notes: str = "",
+    original_codes: list | None = None,
+    final_codes: list | None = None
+) -> int:
+    """Save an audit record of a human intervention decision."""
+    backend = _backend()
+    if hasattr(backend, "save_human_intervention"):
+        return backend.save_human_intervention(
+            incident_id=incident_id,
+            action=action,
+            reviewed_by=reviewed_by,
+            notes=notes,
+            original_codes=original_codes,
+            final_codes=final_codes
+        )
+    return 0
+
+
+def update_execution_human_status(
+    record_id: str,
+    new_status: str,
+    human_action: str,
+    notes: str,
+    reviewed_by: str,
+    final_codes: list | None = None
+) -> None:
+    """Update execution record after human approval or editing."""
+    backend = _backend()
+    if hasattr(backend, "update_execution_human_status"):
+        backend.update_execution_human_status(
+            record_id=record_id,
+            new_status=new_status,
+            human_action=human_action,
+            notes=notes,
+            reviewed_by=reviewed_by,
+            final_codes=final_codes
+        )
+
+
+def get_pending_reviews(limit: int = 50) -> list[dict]:
+    """Retrieve all execution records waiting for clinical human review."""
+    backend = _backend()
+    if hasattr(backend, "get_pending_reviews"):
+        return backend.get_pending_reviews(limit=limit)
+    return []
+
+
+def get_review_history(limit: int = 50) -> list[dict]:
+    """Retrieve history of completed human review interventions."""
+    backend = _backend()
+    if hasattr(backend, "get_review_history"):
+        return backend.get_review_history(limit=limit)
+    return []
+

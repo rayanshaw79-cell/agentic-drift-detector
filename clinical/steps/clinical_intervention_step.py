@@ -35,12 +35,14 @@ def clinical_intervention_step(state: ClinicalState) -> dict:
         "retry_count=%d, confidence=%.2f — routing to clinical review queue.",
         record_id, retry_count, conf_display,
     )
-    print(f"\n  ⚕️ [CLINICAL INTERVENTION] Record '{record_id}' sent to human review.")
+    print(f"\n  [CLINICAL INTERVENTION] Record '{record_id}' sent to human review.")
     print(f"     Reason: {retry_count} retries with confidence {conf_display:.2f}")
 
-    # Purge any low-confidence / hallucinated codes
+    original_draft_codes = state.get("icd10_codes") or []
+
+    # Purge any low-confidence / hallucinated codes for default output
     safe_codes = [
-        c for c in (state.get("icd10_codes") or [])
+        c for c in original_draft_codes
         if c.get("code", "UNRESOLVED") != "UNRESOLVED"
         and c.get("confidence", 0.0) >= 0.6
     ]
@@ -70,7 +72,9 @@ def clinical_intervention_step(state: ClinicalState) -> dict:
         "step_count":         1,
         "path_taken":         ["clinical_intervention"],
         "icd10_codes":        safe_codes,
+        "original_ai_codes":  original_draft_codes,
         "coding_status":      "requires_clinical_review",
+        "human_review_action": "pending",
         "overall_confidence": 0.0,
         "execution_time_ms":  latency,
     }

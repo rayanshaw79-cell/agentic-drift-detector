@@ -27,6 +27,11 @@ from clinical.steps.clinical_output_step import clinical_output_step
 from clinical.steps.deid_step import deid_step
 from clinical.steps.compliance_checker_step import compliance_checker_step
 from clinical.steps.sdoh_integration_step import sdoh_integration_step
+from clinical.steps.trial_matching_step import trial_matching_step
+from clinical.steps.pharmacovigilance_step import pharmacovigilance_step
+from clinical.steps.raf_audit_step import raf_audit_step
+from clinical.steps.symphony_step import symphony_step
+from clinical.steps.fhir_step import fhir_step
 
 # ── Conditional Edge Logic ────────────────────────────────────────────────────
 
@@ -76,7 +81,12 @@ def build_clinical_workflow() -> StateGraph:
     workflow.add_node("disambiguation",         disambiguation_step)
     workflow.add_node("meat_validation",        meat_validation_step)
     workflow.add_node("validation",             validation_step)
-    workflow.add_node("sdoh_integration",       sdoh_integration_step)  # NEW
+    workflow.add_node("sdoh_integration",       sdoh_integration_step)
+    workflow.add_node("trial_matching",         trial_matching_step)
+    workflow.add_node("pharmacovigilance",      pharmacovigilance_step)
+    workflow.add_node("raf_audit",              raf_audit_step)
+    workflow.add_node("symphony_longitudinal",  symphony_step)
+    workflow.add_node("fhir_export",            fhir_step)  # Phase 5 SMART-on-FHIR R4 Adapter Node
     workflow.add_node("clinical_intervention",  clinical_intervention_step)
     workflow.add_node("clinical_output",        clinical_output_step)
 
@@ -107,8 +117,13 @@ def build_clinical_workflow() -> StateGraph:
         },
     )
 
-    # SDOH integration proceeds to output
-    workflow.add_edge("sdoh_integration", "clinical_output")
+    # SDOH integration proceeds to trial matching → pharmacovigilance → raf_audit → symphony → fhir → output
+    workflow.add_edge("sdoh_integration",    "trial_matching")
+    workflow.add_edge("trial_matching",      "pharmacovigilance")
+    workflow.add_edge("pharmacovigilance",    "raf_audit")
+    workflow.add_edge("raf_audit",           "symphony_longitudinal")
+    workflow.add_edge("symphony_longitudinal", "fhir_export")
+    workflow.add_edge("fhir_export",          "clinical_output")
 
     # Intervention always terminates at clinical_output
     workflow.add_edge("clinical_intervention", "clinical_output")
@@ -122,3 +137,34 @@ def build_clinical_workflow() -> StateGraph:
 def clinical_coding_workflow(initial_state: ClinicalState) -> ClinicalState:
     graph = build_clinical_workflow()
     return graph.invoke(initial_state)
+
+
+def apply_human_approval(
+    state: dict,
+    action: str,
+    reviewed_by: str = "clinician",
+    notes: str = "",
+    final_codes: list | None = None
+) -> dict:
+    """
+    Applies clinician approval or modification to a flagged clinical state.
+    """
+    import datetime
+    updated_state = dict(state)
+    updated_state["human_review_action"] = action
+    updated_state["reviewed_by"] = reviewed_by
+    updated_state["reviewed_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    updated_state["human_notes"] = notes
+
+    if action in ("approved", "edited"):
+        updated_state["coding_status"] = "approved_by_clinician"
+        if final_codes is not None:
+            updated_state["icd10_codes"] = final_codes
+        updated_state["overall_confidence"] = 1.0
+    elif action == "rejected":
+        updated_state["coding_status"] = "rejected_by_clinician"
+        updated_state["icd10_codes"] = []
+        updated_state["overall_confidence"] = 0.0
+
+    return updated_state
+

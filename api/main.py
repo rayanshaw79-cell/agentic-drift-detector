@@ -4,8 +4,14 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
-from workflows.clinical_coding import clinical_coding_workflow
-from telemetry.store import save_execution_state
+from workflows.clinical_coding import clinical_coding_workflow, apply_human_approval
+from telemetry.store import (
+    save_execution_state,
+    get_pending_reviews,
+    get_review_history,
+    save_human_intervention,
+    update_execution_human_status,
+)
 from clinical.config.cache import init_semantic_cache
 
 app = FastAPI(
@@ -31,8 +37,40 @@ class ClinicalResponse(BaseModel):
     sdoh_risk_label: Optional[str]
     sdoh_risk_score: Optional[float]
     sdoh_shap_factors: Optional[List[Dict[str, Any]]]
+    trial_matches: Optional[List[Dict[str, Any]]] = None
+    extracted_medications: Optional[List[Dict[str, Any]]] = None
+    drug_interactions: Optional[List[Dict[str, Any]]] = None
+    adverse_drug_reactions: Optional[List[Dict[str, Any]]] = None
+    drug_safety_risk: Optional[str] = None
+    total_raf_score: Optional[float] = None
+    verified_raf_score: Optional[float] = None
+    unverified_raf_score: Optional[float] = None
+    radv_financial_exposure_usd: Optional[float] = None
+    radv_audit_label: Optional[str] = None
+    longitudinal_timeline: Optional[List[Dict[str, Any]]] = None
+    recist_overall_response: Optional[str] = None
+    lesion_measurements: Optional[List[Dict[str, Any]]] = None
+    fhir_bundle: Optional[Dict[str, Any]] = None
     path_taken: List[str]
     execution_time_ms: int
+
+class PharmaCheckRequest(BaseModel):
+    medications: List[str]
+    raw_note: Optional[str] = ""
+
+class RafAuditRequest(BaseModel):
+    icd10_codes: List[Dict[str, Any]]
+    demographics: Optional[Dict[str, Any]] = None
+
+class SymphonyTimelineRequest(BaseModel):
+    visit_history: List[Dict[str, Any]]
+
+class ApprovalRequest(BaseModel):
+    record_id: str
+    action: str  # "approved" | "edited" | "rejected"
+    reviewed_by: Optional[str] = "clinician"
+    notes: Optional[str] = ""
+    final_codes: Optional[List[Dict[str, Any]]] = None
 
 @app.get("/health")
 def health_check():
@@ -89,6 +127,129 @@ def extract_clinical_data(req: ClinicalRequest):
         sdoh_risk_label=final_state.get("sdoh_risk_label"),
         sdoh_risk_score=final_state.get("sdoh_risk_score"),
         sdoh_shap_factors=final_state.get("sdoh_shap_factors"),
+        trial_matches=final_state.get("trial_matches"),
+        extracted_medications=final_state.get("extracted_medications"),
+        drug_interactions=final_state.get("drug_interactions"),
+        adverse_drug_reactions=final_state.get("adverse_drug_reactions"),
+        drug_safety_risk=final_state.get("drug_safety_risk"),
+        total_raf_score=final_state.get("total_raf_score"),
+        verified_raf_score=final_state.get("verified_raf_score"),
+        unverified_raf_score=final_state.get("unverified_raf_score"),
+        radv_financial_exposure_usd=final_state.get("radv_financial_exposure_usd"),
+        radv_audit_label=final_state.get("radv_audit_label"),
+        longitudinal_timeline=final_state.get("longitudinal_timeline"),
+        recist_overall_response=final_state.get("recist_overall_response"),
+        lesion_measurements=final_state.get("lesion_measurements"),
+        fhir_bundle=final_state.get("fhir_bundle"),
         path_taken=final_state.get("path_taken", []),
         execution_time_ms=execution_time
     )
+
+# ── SMART-on-FHIR R4 Adapter Endpoints ─────────────────────────────────────
+
+@app.post("/v1/clinical/fhir/export")
+def export_fhir_bundle(state_data: Dict[str, Any]):
+    """Export extracted clinical state into HL7 FHIR R4 JSON Bundle."""
+    from clinical.tools.fhir_adapter import export_clinical_state_to_fhir
+    return export_clinical_state_to_fhir(state_data)
+
+@app.post("/v1/clinical/fhir/seed")
+def seed_synthetic_patient(condition: Optional[str] = "Non-Small Cell Lung Cancer"):
+    """Generate synthetic oncology patient chart for evaluation and testing."""
+    from clinical.tools.fhir_adapter import generate_synthetic_patient_chart
+    return generate_synthetic_patient_chart(condition=condition or "Non-Small Cell Lung Cancer")
+
+# ── SYMPHONY v2 Longitudinal Disease Timeline Endpoint ──────────────────────
+
+@app.post("/v1/clinical/symphony/timeline")
+def generate_symphony_timeline(req: SymphonyTimelineRequest):
+    """Synthesize multi-visit patient records and calculate RECIST 1.1 treatment response."""
+    from clinical.tools.symphony_engine import synthesize_patient_timeline
+    return synthesize_patient_timeline(req.visit_history)
+
+# ── CMS Financial RAF & RADV Audit Endpoint ─────────────────────────────────
+
+@app.post("/v1/clinical/raf-audit/calculate")
+def calculate_raf_audit(req: RafAuditRequest):
+    """Calculate CMS RAF scores and Medicare RADV audit financial exposure ($ USD)."""
+    from clinical.tools.raf_audit_calculator import calculate_raf_audit_metrics
+    return calculate_raf_audit_metrics(req.icd10_codes, req.demographics)
+
+# ── Pharmacovigilance & Drug Safety Endpoint ────────────────────────────────
+
+@app.post("/v1/clinical/pharmacovigilance/check")
+def check_pharmacovigilance(req: PharmaCheckRequest):
+    """Check drug-drug interactions and extract adverse drug reaction signals."""
+    from clinical.tools.pharmacovigilance_api import check_drug_interactions
+    from clinical.steps.pharmacovigilance_step import _extract_adverse_reactions, _compute_safety_risk
+
+    interactions = check_drug_interactions(req.medications) if len(req.medications) >= 2 else []
+    adrs = _extract_adverse_reactions(req.raw_note or "", req.medications)
+    risk_level = _compute_safety_risk(interactions, adrs)
+
+    return {
+        "medications": req.medications,
+        "interactions": interactions,
+        "adverse_drug_reactions": adrs,
+        "drug_safety_risk": risk_level
+    }
+
+# ── PRISM v2 Live Clinical Trial Matching Endpoint ──────────────────────────
+
+@app.get("/v1/clinical/trials/search")
+def search_clinical_trials(condition: str, location: Optional[str] = None, limit: int = 5):
+    """Search live recruiting trials from ClinicalTrials.gov API v2."""
+    from clinical.tools.clinical_trials_api import search_recruiting_trials
+    trials = search_recruiting_trials(condition=condition, location=location, limit=limit)
+    return {"query": condition, "count": len(trials), "trials": trials}
+
+# ── Human-in-the-Loop (HITL) Endpoints ─────────────────────────────────────
+
+@app.get("/v1/clinical/review-queue")
+def fetch_review_queue(limit: int = 50):
+    """Fetch pending records requiring clinical review."""
+    pending = get_pending_reviews(limit=limit)
+    return {"pending_count": len(pending), "records": pending}
+
+@app.post("/v1/clinical/approve")
+def submit_human_approval(req: ApprovalRequest):
+    """Submit a clinician's approval, edit, or rejection decision for a flagged record."""
+    if req.action not in ("approved", "edited", "rejected"):
+        raise HTTPException(status_code=400, detail="Action must be 'approved', 'edited', or 'rejected'")
+    
+    new_status = "approved_by_clinician" if req.action in ("approved", "edited") else "rejected_by_clinician"
+    
+    # Save intervention audit record
+    intervention_id = save_human_intervention(
+        incident_id=req.record_id,
+        action=req.action,
+        reviewed_by=req.reviewed_by or "clinician",
+        notes=req.notes or "",
+        original_codes=[],
+        final_codes=req.final_codes or []
+    )
+    
+    # Update execution telemetry record
+    update_execution_human_status(
+        record_id=req.record_id,
+        new_status=new_status,
+        human_action=req.action,
+        notes=req.notes or "",
+        reviewed_by=req.reviewed_by or "clinician",
+        final_codes=req.final_codes or []
+    )
+    
+    return {
+        "status": "success",
+        "record_id": req.record_id,
+        "intervention_id": intervention_id,
+        "action": req.action,
+        "coding_status": new_status
+    }
+
+@app.get("/v1/clinical/review-history")
+def fetch_review_history(limit: int = 50):
+    """Fetch past clinician review interventions for auditing."""
+    history = get_review_history(limit=limit)
+    return {"history_count": len(history), "records": history}
+

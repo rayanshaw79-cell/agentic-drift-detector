@@ -37,19 +37,36 @@ _CREATE_TABLE = """
     )
 """
 
+_CREATE_HITL_TABLE = """
+    CREATE TABLE IF NOT EXISTS human_interventions (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        incident_id         TEXT NOT NULL,
+        action              TEXT NOT NULL,
+        reviewed_by         TEXT DEFAULT 'clinician',
+        notes               TEXT DEFAULT '',
+        original_codes_json TEXT,
+        final_codes_json    TEXT,
+        created_at          DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+"""
+
 _MIGRATIONS = [
-    ("drift_score",       "INTEGER DEFAULT 0"),
-    ("risk_level",        "TEXT DEFAULT 'healthy'"),
-    ("created_at",        "DATETIME DEFAULT CURRENT_TIMESTAMP"),
-    ("workflow_type",     "TEXT DEFAULT 'incident_triage'"),
-    ("overall_confidence", "REAL DEFAULT NULL"),
-    ("unresolved_count",   "INTEGER DEFAULT 0"),
-    ("total_entities",     "INTEGER DEFAULT 0"),
-    ("ml_explanation",     "TEXT DEFAULT NULL"),
-    ("privacy_leak_risk",  "REAL DEFAULT 0.0"),
-    ("sdoh_risk_label",    "TEXT DEFAULT NULL"),
-    ("sdoh_risk_score",    "REAL DEFAULT NULL"),
-    ("sdoh_shap_factors",  "TEXT DEFAULT NULL"),
+    ("drift_score",          "INTEGER DEFAULT 0"),
+    ("risk_level",           "TEXT DEFAULT 'healthy'"),
+    ("created_at",           "DATETIME DEFAULT CURRENT_TIMESTAMP"),
+    ("workflow_type",        "TEXT DEFAULT 'incident_triage'"),
+    ("overall_confidence",    "REAL DEFAULT NULL"),
+    ("unresolved_count",      "INTEGER DEFAULT 0"),
+    ("total_entities",        "INTEGER DEFAULT 0"),
+    ("ml_explanation",        "TEXT DEFAULT NULL"),
+    ("privacy_leak_risk",     "REAL DEFAULT 0.0"),
+    ("sdoh_risk_label",       "TEXT DEFAULT NULL"),
+    ("sdoh_risk_score",       "REAL DEFAULT NULL"),
+    ("sdoh_shap_factors",     "TEXT DEFAULT NULL"),
+    ("human_review_action",  "TEXT DEFAULT NULL"),
+    ("human_notes",          "TEXT DEFAULT NULL"),
+    ("reviewed_by",          "TEXT DEFAULT NULL"),
+    ("icd10_codes_json",     "TEXT DEFAULT NULL"),
 ]
 
 _INSERT = """
@@ -100,9 +117,10 @@ _DEFAULT_BASELINE = {
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def init_db() -> None:
-    """Create the executions table and apply pending column migrations."""
+    """Create the executions and human_interventions tables and apply pending column migrations."""
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(_CREATE_TABLE)
+        conn.execute(_CREATE_HITL_TABLE)
         for col, definition in _MIGRATIONS:
             try:
                 conn.execute(f"ALTER TABLE executions ADD COLUMN {col} {definition}")
@@ -177,3 +195,98 @@ def get_historical_metrics(
         "avg_unresolved_rate":          row["avg_unresolved_rate"]          or 0.05,
         "avg_privacy_leak_risk":        row["avg_privacy_leak_risk"]        or 0.0,
     }
+
+
+# ── Human-in-the-Loop (HITL) Helper API ────────────────────────────────────────
+
+def save_human_intervention(
+    incident_id: str,
+    action: str,
+    reviewed_by: str = "clinician",
+    notes: str = "",
+    original_codes: list | None = None,
+    final_codes: list | None = None
+) -> int:
+    """Save an audit record of a human intervention decision."""
+    query = """
+        INSERT INTO human_interventions (
+            incident_id, action, reviewed_by, notes, original_codes_json, final_codes_json
+        ) VALUES (?, ?, ?, ?, ?, ?)
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.execute(query, (
+            incident_id,
+            action,
+            reviewed_by,
+            notes,
+            json.dumps(original_codes or []),
+            json.dumps(final_codes or [])
+        ))
+        conn.commit()
+        return cursor.lastrowid or 0
+
+
+def update_execution_human_status(
+    record_id: str,
+    new_status: str,
+    human_action: str,
+    notes: str,
+    reviewed_by: str,
+    final_codes: list | None = None
+) -> None:
+    """Update execution record after human approval or editing."""
+    query = """
+        UPDATE executions
+        SET decision = ?,
+            human_review_action = ?,
+            human_notes = ?,
+            reviewed_by = ?
+        WHERE incident_id = ?
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(query, (new_status, human_action, notes, reviewed_by, record_id))
+        conn.commit()
+
+
+def get_pending_reviews(limit: int = 50) -> list[dict]:
+    """Retrieve all execution records waiting for clinical human review."""
+    init_db()
+    query = """
+        SELECT incident_id, decision, confidence, overall_confidence, step_count, retry_count,
+               sdoh_risk_label, sdoh_risk_score, created_at, workflow_type
+        FROM executions
+        WHERE decision = 'requires_clinical_review'
+          AND (human_review_action IS NULL OR human_review_action = 'pending')
+        ORDER BY id DESC
+        LIMIT ?
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(query, (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_review_history(limit: int = 50) -> list[dict]:
+    """Retrieve history of completed human review interventions."""
+    init_db()
+    query = """
+        SELECT id, incident_id, action, reviewed_by, notes, original_codes_json, final_codes_json, created_at
+        FROM human_interventions
+        ORDER BY id DESC
+        LIMIT ?
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(query, (limit,)).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["original_codes"] = json.loads(d["original_codes_json"]) if d["original_codes_json"] else []
+                d["final_codes"] = json.loads(d["final_codes_json"]) if d["final_codes_json"] else []
+            except Exception:
+                d["original_codes"] = []
+                d["final_codes"] = []
+            result.append(d)
+        return result
+

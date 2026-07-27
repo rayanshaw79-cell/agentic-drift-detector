@@ -9,7 +9,7 @@ import operator
 from typing import TypedDict, Optional, List, Annotated
 
 
-class SdohState(TypedDict):
+class SdohState(TypedDict, total=False):
     # ── Identity ──────────────────────────────────────────────────────────────
     patient_id: str
 
