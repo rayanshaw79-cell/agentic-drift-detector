@@ -1,0 +1,182 @@
+[
+  {
+    "query_id": "lung_001",
+    "query": "lung cancer T2a tumor size staging",
+    "cancer_type": "Lung",
+    "expected_chunk_keywords": ["T2a", "Tumor > 3 cm but"],
+    "expected_section": "PRIMARY TUMOR (T)",
+    "source_file": "lung_staging.txt",
+    "notes": "Core T2a definition — should be rank 1"
+  },
+  {
+    "query_id": "lung_002",
+    "query": "T2b lung tumor size definition NSCLC",
+    "cancer_type": "Lung",
+    "expected_chunk_keywords": ["T2b", "Tumor > 4 cm but"],
+    "expected_section": "PRIMARY TUMOR (T)",
+    "source_file": "lung_staging.txt",
+    "notes": "BM25 critical: exact code T2b must surface"
+  },
+  {
+    "query_id": "lung_003",
+    "query": "lung N2 lymph node mediastinal metastasis",
+    "cancer_type": "Lung",
+    "expected_chunk_keywords": ["N2", "ipsilateral mediastinal"],
+    "expected_section": "REGIONAL LYMPH NODES (N)",
+    "source_file": "lung_staging.txt",
+    "notes": "N-staging retrieval test"
+  },
+  {
+    "query_id": "lung_004",
+    "query": "Stage IIB lung cancer pT2a pN1",
+    "cancer_type": "Lung",
+    "expected_chunk_keywords": ["Stage IIB", "T2a N1 M0"],
+    "expected_section": "STAGE GROUPINGS (NSCLC)",
+    "source_file": "lung_staging.txt",
+    "notes": "Stage grouping lookup — common clinical query"
+  },
+  {
+    "query_id": "lung_005",
+    "query": "Stage IIIA NSCLC T4 N1 M0 staging criteria",
+    "cancer_type": "Lung",
+    "expected_chunk_keywords": ["Stage IIIA", "T4 N1 M0"],
+    "expected_section": "STAGE GROUPINGS (NSCLC)",
+    "source_file": "lung_staging.txt",
+    "notes": "Verifies stage groupings section is retrievable"
+  },
+  {
+    "query_id": "lung_006",
+    "query": "EGFR exon 19 deletion osimertinib lung treatment",
+    "cancer_type": "Lung",
+    "expected_chunk_keywords": ["EGFR", "exon 19 deletion", "osimertinib"],
+    "expected_section": "KEY BIOMARKERS FOR LUNG CANCER TREATMENT SELECTION",
+    "source_file": "lung_staging.txt",
+    "notes": "Biomarker + treatment retrieval — semantic query"
+  },
+  {
+    "query_id": "lung_007",
+    "query": "small cell lung cancer limited extensive stage SCLC",
+    "cancer_type": "Lung",
+    "expected_chunk_keywords": ["Limited Stage", "Extensive Stage", "SCLC"],
+    "expected_section": "SMALL CELL LUNG CANCER (SCLC)",
+    "source_file": "lung_staging.txt",
+    "notes": "SCLC-specific section — should not retrieve NSCLC chunks"
+  },
+  {
+    "query_id": "breast_001",
+    "query": "breast cancer T1c tumor size definition",
+    "cancer_type": "Breast",
+    "expected_chunk_keywords": ["T1c", "Tumor > 10 mm but"],
+    "expected_section": "PRIMARY TUMOR (T)",
+    "source_file": "breast_staging.txt",
+    "notes": "Breast-specific T1c definition"
+  },
+  {
+    "query_id": "breast_002",
+    "query": "breast cancer N1 axillary lymph node micrometastasis",
+    "cancer_type": "Breast",
+    "expected_chunk_keywords": ["N1mi", "Micrometastases", "axillary"],
+    "expected_section": "REGIONAL LYMPH NODES (N)",
+    "source_file": "breast_staging.txt",
+    "notes": "N1mi is a breast-specific sub-classification — no lung equivalent"
+  },
+  {
+    "query_id": "breast_003",
+    "query": "Stage IIIA breast cancer T3 N2",
+    "cancer_type": "Breast",
+    "expected_chunk_keywords": ["Stage IIIA", "T3 N1-N2"],
+    "expected_section": "ANATOMIC STAGE GROUPS (BREAST CANCER)",
+    "source_file": "breast_staging.txt",
+    "notes": "Stage grouping retrieval"
+  },
+  {
+    "query_id": "breast_004",
+    "query": "HER2 positive IHC 3+ FISH ratio breast cancer",
+    "cancer_type": "Breast",
+    "expected_chunk_keywords": ["IHC 3+", "HER2/CEP17 ratio", "HER2-positive"],
+    "expected_section": "KEY BIOMARKERS AND RECEPTOR STATUS",
+    "source_file": "breast_staging.txt",
+    "notes": "BM25 critical: IHC 3+ and FISH are exact clinical codes"
+  },
+  {
+    "query_id": "breast_005",
+    "query": "triple negative breast cancer TNBC pembrolizumab PD-L1",
+    "cancer_type": "Breast",
+    "expected_chunk_keywords": ["Triple-Negative", "TNBC", "Pembrolizumab"],
+    "expected_section": "KEY BIOMARKERS AND RECEPTOR STATUS",
+    "source_file": "breast_staging.txt",
+    "notes": "Immunotherapy eligibility — semantic + keyword query"
+  },
+  {
+    "query_id": "breast_006",
+    "query": "BRCA1 BRCA2 pathogenic variant PARP inhibitor olaparib",
+    "cancer_type": "Breast",
+    "expected_chunk_keywords": ["BRCA1/2", "olaparib", "PARP inhibitor"],
+    "expected_section": "KEY BIOMARKERS AND RECEPTOR STATUS",
+    "source_file": "breast_staging.txt",
+    "notes": "Germline testing and treatment eligibility"
+  },
+  {
+    "query_id": "breast_007",
+    "query": "inflammatory breast cancer T4d staging",
+    "cancer_type": "Breast",
+    "expected_chunk_keywords": ["T4d", "Inflammatory carcinoma"],
+    "expected_section": "PRIMARY TUMOR (T)",
+    "source_file": "breast_staging.txt",
+    "notes": "T4d is breast-specific — must not retrieve colorectal T4 definition"
+  },
+  {
+    "query_id": "colorectal_001",
+    "query": "colorectal cancer T3 muscularis propria pericolorectal",
+    "cancer_type": "Colorectal",
+    "expected_chunk_keywords": ["T3", "muscularis propria", "pericolorectal"],
+    "expected_section": "PRIMARY TUMOR (T)",
+    "source_file": "colorectal_staging.txt",
+    "notes": "Core T3 colorectal definition"
+  },
+  {
+    "query_id": "colorectal_002",
+    "query": "colorectal N2b 7 or more regional lymph nodes",
+    "cancer_type": "Colorectal",
+    "expected_chunk_keywords": ["N2b", "7 regional lymph nodes"],
+    "expected_section": "REGIONAL LYMPH NODES (N)",
+    "source_file": "colorectal_staging.txt",
+    "notes": "BM25 critical: N2b is exact code"
+  },
+  {
+    "query_id": "colorectal_003",
+    "query": "Stage IIIC colorectal cancer T4b N1 M0",
+    "cancer_type": "Colorectal",
+    "expected_chunk_keywords": ["Stage IIIC", "T4b N1-N2 M0"],
+    "expected_section": "STAGE GROUPS (COLORECTAL CANCER)",
+    "source_file": "colorectal_staging.txt",
+    "notes": "Stage grouping lookup"
+  },
+  {
+    "query_id": "colorectal_004",
+    "query": "colorectal peritoneal metastasis M1c staging",
+    "cancer_type": "Colorectal",
+    "expected_chunk_keywords": ["M1c", "peritoneal surface", "Stage IVC"],
+    "expected_section": "DISTANT METASTASIS (M)",
+    "source_file": "colorectal_staging.txt",
+    "notes": "M1c is colorectal-specific — not in lung/breast"
+  },
+  {
+    "query_id": "colorectal_005",
+    "query": "MSI-H dMMR colorectal pembrolizumab checkpoint inhibitor",
+    "cancer_type": "Colorectal",
+    "expected_chunk_keywords": ["dMMR", "MSI-H", "Pembrolizumab"],
+    "expected_section": "KEY BIOMARKERS FOR COLORECTAL CANCER",
+    "source_file": "colorectal_staging.txt",
+    "notes": "Immunotherapy eligibility — MSI-H is a key biomarker"
+  },
+  {
+    "query_id": "colorectal_006",
+    "query": "KRAS NRAS mutation RAS RAF colorectal cetuximab resistance",
+    "cancer_type": "Colorectal",
+    "expected_chunk_keywords": ["KRAS", "NRAS", "cetuximab", "RESISTANCE"],
+    "expected_section": "KEY BIOMARKERS FOR COLORECTAL CANCER",
+    "source_file": "colorectal_staging.txt",
+    "notes": "Anti-EGFR eligibility — RAS mutation testing"
+  }
+]

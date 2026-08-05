@@ -1,0 +1,507 @@
+{
+  "metrics": {
+    "chunker": "section",
+    "k": 2,
+    "n_samples": 20,
+    "n_faithfulness": 20,
+    "recall_at_k": 0.95,
+    "mrr": 0.9,
+    "context_precision": 0.5,
+    "faithfulness_t1": 0.95,
+    "faithfulness_t2_llm": null,
+    "timestamp": "2026-08-05T11:55:56.314339"
+  },
+  "samples": [
+    {
+      "query_id": "lung_001",
+      "query": "lung cancer T2a tumor size staging",
+      "cancer_type": "Lung",
+      "expected_section": "PRIMARY TUMOR (T)",
+      "expected_keywords": [
+        "T2a",
+        "Tumor > 3 cm but"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 15561,
+      "retrieved_preview": "[SOURCE: lung_staging.txt | SECTION: PRIMARY TUMOR (T)]\nPRIMARY TUMOR (T):\nT1: Tumor \u2264 3 cm, surrounded by lung or visceral pleura, no bronchoscopic evidence of invasion more proximal than lobar bronchus.\n  T1a: Tumor \u2264 1 cm\n  T1b: Tumor > 1 cm but \u2264 2 cm\n  T1c: Tumor > 2 cm but \u2264 3 cm\nT2: Tumor > 3"
+    },
+    {
+      "query_id": "lung_002",
+      "query": "T2b lung tumor size definition NSCLC",
+      "cancer_type": "Lung",
+      "expected_section": "PRIMARY TUMOR (T)",
+      "expected_keywords": [
+        "T2b",
+        "Tumor > 4 cm but"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 0.5,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 549,
+      "retrieved_preview": "[SOURCE: lung_staging.txt | SECTION: SMALL CELL LUNG CANCER (SCLC)]\nSCLC is often staged using the Veterans Administration Lung Study Group (VALSG) system:\nLimited Stage: Disease confined to the ipsilateral hemithorax and regional lymph nodes that can be encompassed within a tolerable radiation port"
+    },
+    {
+      "query_id": "lung_003",
+      "query": "lung N2 lymph node mediastinal metastasis",
+      "cancer_type": "Lung",
+      "expected_section": "REGIONAL LYMPH NODES (N)",
+      "expected_keywords": [
+        "N2",
+        "ipsilateral mediastinal"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 520,
+      "retrieved_preview": "[SOURCE: lung_staging.txt | SECTION: REGIONAL LYMPH NODES (N)]\nREGIONAL LYMPH NODES (N):\nN0: No regional lymph node metastasis.\nN1: Metastasis in ipsilateral peribronchial and/or ipsilateral hilar lymph nodes, and intrapulmonary nodes; includes involvement by direct extension.\nN2: Metastasis in ipsi"
+    },
+    {
+      "query_id": "lung_004",
+      "query": "Stage IIB lung cancer pT2a pN1",
+      "cancer_type": "Lung",
+      "expected_section": "STAGE GROUPINGS (NSCLC)",
+      "expected_keywords": [
+        "Stage IIB",
+        "T2a N1 M0"
+      ],
+      "recall_hit": false,
+      "recall": 0.0,
+      "mrr": 0.0,
+      "context_precision": 0.0,
+      "faithfulness_t1": 0.0,
+      "faithfulness_t1_error": "Deterministic faithfulness FAILED: 0.00 (0/2 values grounded in RAG context). Values checked: ['Stage IIB', 'T2a N1 M0']",
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 790,
+      "retrieved_preview": "[SOURCE: lung_staging.txt | SECTION: PRIMARY TUMOR (T)]\nPRIMARY TUMOR (T):\nT1: Tumor \u2264 3 cm, surrounded by lung or visceral pleura, no bronchoscopic evidence of invasion more proximal than lobar bronchus.\n  T1a: Tumor \u2264 1 cm\n  T1b: Tumor > 1 cm but \u2264 2 cm\n  T1c: Tumor > 2 cm but \u2264 3 cm\nT2: Tumor > 3"
+    },
+    {
+      "query_id": "lung_005",
+      "query": "Stage IIIA NSCLC T4 N1 M0 staging criteria",
+      "cancer_type": "Lung",
+      "expected_section": "STAGE GROUPINGS (NSCLC)",
+      "expected_keywords": [
+        "Stage IIIA",
+        "T4 N1 M0"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 521,
+      "retrieved_preview": "[SOURCE: lung_staging.txt | SECTION: STAGE GROUPINGS (NSCLC)]\nStage IA1: T1a N0 M0\nStage IA2: T1b N0 M0\nStage IA3: T1c N0 M0\nStage IB:  T2a N0 M0\nStage IIA: T2b N0 M0\nStage IIB: T1a-c N1 M0; T2a N1 M0; T2b N1 M0; T3 N0 M0\nStage IIIA: T1a-c N2 M0; T2a-b N2 M0; T3 N1 M0; T4 N0 M0; T4 N1 M0\nStage IIIB:"
+    },
+    {
+      "query_id": "lung_006",
+      "query": "EGFR exon 19 deletion osimertinib lung treatment",
+      "cancer_type": "Lung",
+      "expected_section": "KEY BIOMARKERS FOR LUNG CANCER TREATMENT SELECTION",
+      "expected_keywords": [
+        "EGFR",
+        "exon 19 deletion",
+        "osimertinib"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 558,
+      "retrieved_preview": "[SOURCE: lung_staging.txt | SECTION: KEY BIOMARKERS FOR LUNG CANCER TREATMENT SELECTION]\nEGFR mutations (exon 19 deletion, L858R exon 21, exon 20 insertion): First-line EGFR TKI therapy (osimertinib preferred).\nALK rearrangement: First-line ALK inhibitor (alectinib, brigatinib, lorlatinib).\nROS1 rea"
+    },
+    {
+      "query_id": "lung_007",
+      "query": "small cell lung cancer limited extensive stage SCLC",
+      "cancer_type": "Lung",
+      "expected_section": "SMALL CELL LUNG CANCER (SCLC)",
+      "expected_keywords": [
+        "Limited Stage",
+        "Extensive Stage",
+        "SCLC"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 547,
+      "retrieved_preview": "[SOURCE: lung_staging.txt | SECTION: SMALL CELL LUNG CANCER (SCLC)]\nSCLC is often staged using the Veterans Administration Lung Study Group (VALSG) system:\nLimited Stage: Disease confined to the ipsilateral hemithorax and regional lymph nodes that can be encompassed within a tolerable radiation port"
+    },
+    {
+      "query_id": "breast_001",
+      "query": "breast cancer T1c tumor size definition",
+      "cancer_type": "Breast",
+      "expected_section": "PRIMARY TUMOR (T)",
+      "expected_keywords": [
+        "T1c",
+        "Tumor > 10 mm but"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 462,
+      "retrieved_preview": "[SOURCE: breast_staging.txt | SECTION: PRIMARY TUMOR (T)]\nTx:  Primary tumor cannot be assessed.\nT0:  No evidence of primary tumor.\nTis: Carcinoma in situ.\n  Tis (DCIS): Ductal carcinoma in situ.\n  Tis (Paget): Paget disease of the nipple not associated with invasive carcinoma or DCIS.\nT1:  Tumor \u2264 "
+    },
+    {
+      "query_id": "breast_002",
+      "query": "breast cancer N1 axillary lymph node micrometastasis",
+      "cancer_type": "Breast",
+      "expected_section": "REGIONAL LYMPH NODES (N)",
+      "expected_keywords": [
+        "N1mi",
+        "Micrometastases",
+        "axillary"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 1.0,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 493,
+      "retrieved_preview": "[SOURCE: breast_staging.txt | SECTION: REGIONAL LYMPH NODES (N)]\nN0:  No regional lymph node metastasis.\nN1:  Micrometastases; or metastases in 1\u20133 axillary lymph nodes; and/or in internal mammary nodes.\n  N1mi: Micrometastases (> 0.2 mm and/or > 200 cells, but none > 2.0 mm)\n  N1a:  Metastases in 1"
+    },
+    {
+      "query_id": "breast_003",
+      "query": "Stage IIIA breast cancer T3 N2",
+      "cancer_type": "Breast",
+      "expected_section": "ANATOMIC STAGE GROUPS (BREAST CANCER)",
+      "expected_keywords": [
+        "Stage IIIA",
+        "T3 N1-N2"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 479,
+      "retrieved_preview": "[SOURCE: breast_staging.txt | SECTION: ANATOMIC STAGE GROUPS (BREAST CANCER)]\nStage 0:   Tis N0 M0\nStage IA:  T1 N0 M0\nStage IB:  T0-T1 N1mi M0\nStage IIA: T0-T1 N1 M0; T2 N0 M0\nStage IIB: T2 N1 M0; T3 N0 M0\nStage IIIA: T0-T2 N2 M0; T3 N1-N2 M0\nStage IIIB: T4 N0-N2 M0\nStage IIIC: Any T N3 M0\nStage IV"
+    },
+    {
+      "query_id": "breast_004",
+      "query": "HER2 positive IHC 3+ FISH ratio breast cancer",
+      "cancer_type": "Breast",
+      "expected_section": "KEY BIOMARKERS AND RECEPTOR STATUS",
+      "expected_keywords": [
+        "IHC 3+",
+        "HER2/CEP17 ratio",
+        "HER2-positive"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 476,
+      "retrieved_preview": "[SOURCE: breast_staging.txt | SECTION: KEY BIOMARKERS AND RECEPTOR STATUS]\nHormone Receptor (HR) Status:\n  ER-positive (ER+): \u2265 1% of tumor cells staining positive by IHC. Endocrine therapy (tamoxifen, aromatase inhibitors) is indicated.\n  ER-negative (ER-): < 1% of tumor cells staining.\n  PR-positi"
+    },
+    {
+      "query_id": "breast_005",
+      "query": "triple negative breast cancer TNBC pembrolizumab PD-L1",
+      "cancer_type": "Breast",
+      "expected_section": "KEY BIOMARKERS AND RECEPTOR STATUS",
+      "expected_keywords": [
+        "Triple-Negative",
+        "TNBC",
+        "Pembrolizumab"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 538,
+      "retrieved_preview": "[SOURCE: breast_staging.txt | SECTION: KEY BIOMARKERS AND RECEPTOR STATUS]\nBreast Cancer Subtypes:\n  Luminal A: ER+/PR+, HER2-, low Ki-67 (< 14%)\n  Luminal B: ER+/PR+, HER2- with high Ki-67; or ER+, HER2+\n  HER2-enriched: ER-, PR-, HER2+\n  Triple-Negative (TNBC): ER-, PR-, HER2-\n\nBRCA1/2 Germline Te"
+    },
+    {
+      "query_id": "breast_006",
+      "query": "BRCA1 BRCA2 pathogenic variant PARP inhibitor olaparib",
+      "cancer_type": "Breast",
+      "expected_section": "KEY BIOMARKERS AND RECEPTOR STATUS",
+      "expected_keywords": [
+        "BRCA1/2",
+        "olaparib",
+        "PARP inhibitor"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 598,
+      "retrieved_preview": "[SOURCE: breast_staging.txt | SECTION: KEY BIOMARKERS AND RECEPTOR STATUS]\nBreast Cancer Subtypes:\n  Luminal A: ER+/PR+, HER2-, low Ki-67 (< 14%)\n  Luminal B: ER+/PR+, HER2- with high Ki-67; or ER+, HER2+\n  HER2-enriched: ER-, PR-, HER2+\n  Triple-Negative (TNBC): ER-, PR-, HER2-\n\nBRCA1/2 Germline Te"
+    },
+    {
+      "query_id": "breast_007",
+      "query": "inflammatory breast cancer T4d staging",
+      "cancer_type": "Breast",
+      "expected_section": "PRIMARY TUMOR (T)",
+      "expected_keywords": [
+        "T4d",
+        "Inflammatory carcinoma"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 577,
+      "retrieved_preview": "[SOURCE: breast_staging.txt | SECTION: PRIMARY TUMOR (T)]\nT4a: Extension to chest wall (not including pectoralis muscle)\n  T4b: Ulceration and/or ipsilateral satellite skin nodules and/or edema (including peau d'orange)\n  T4c: Both T4a and T4b\n  T4d: Inflammatory carcinoma\n\n---\n\n[SOURCE: breast_stag"
+    },
+    {
+      "query_id": "colorectal_001",
+      "query": "colorectal cancer T3 muscularis propria pericolorectal",
+      "cancer_type": "Colorectal",
+      "expected_section": "PRIMARY TUMOR (T)",
+      "expected_keywords": [
+        "T3",
+        "muscularis propria",
+        "pericolorectal"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 438,
+      "retrieved_preview": "[SOURCE: colorectal_staging.txt | SECTION: PRIMARY TUMOR (T)]\nTx:  Primary tumor cannot be assessed.\nT0:  No evidence of primary tumor.\nTis: Carcinoma in situ \u2014 intramucosal carcinoma (invasion of lamina propria only).\nT1:  Tumor invades the submucosa (through the muscularis mucosa but not into the "
+    },
+    {
+      "query_id": "colorectal_002",
+      "query": "colorectal N2b 7 or more regional lymph nodes",
+      "cancer_type": "Colorectal",
+      "expected_section": "REGIONAL LYMPH NODES (N)",
+      "expected_keywords": [
+        "N2b",
+        "7 regional lymph nodes"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 437,
+      "retrieved_preview": "[SOURCE: colorectal_staging.txt | SECTION: REGIONAL LYMPH NODES (N)]\nN0:  No regional lymph node metastasis.\nN1:  Metastasis in 1\u20133 regional lymph nodes; OR any number of tumor deposits present and all identifiable lymph nodes are negative.\n  N1a: Metastasis in 1 regional lymph node\n  N1b: Metastasi"
+    },
+    {
+      "query_id": "colorectal_003",
+      "query": "Stage IIIC colorectal cancer T4b N1 M0",
+      "cancer_type": "Colorectal",
+      "expected_section": "STAGE GROUPS (COLORECTAL CANCER)",
+      "expected_keywords": [
+        "Stage IIIC",
+        "T4b N1-N2 M0"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 0.5,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 446,
+      "retrieved_preview": "[SOURCE: colorectal_staging.txt | SECTION: PRIMARY TUMOR (T)]\nT4b: Tumor directly invades or adheres to adjacent organs or structures.\n\n---\n\n[SOURCE: colorectal_staging.txt | SECTION: STAGE GROUPS (COLORECTAL CANCER)]\nStage 0:   Tis N0 M0\nStage I:   T1 N0 M0; T2 N0 M0\nStage IIA: T3 N0 M0\nStage IIB: "
+    },
+    {
+      "query_id": "colorectal_004",
+      "query": "colorectal peritoneal metastasis M1c staging",
+      "cancer_type": "Colorectal",
+      "expected_section": "DISTANT METASTASIS (M)",
+      "expected_keywords": [
+        "M1c",
+        "peritoneal surface",
+        "Stage IVC"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 427,
+      "retrieved_preview": "[SOURCE: colorectal_staging.txt | SECTION: DISTANT METASTASIS (M)]\nDISTANT METASTASIS (M):\nM0: No distant metastasis.\nM1a: Metastasis to one site or organ without peritoneal metastasis.\nM1b: Metastasis to \u2265 2 sites or organs without peritoneal metastasis.\nM1c: Metastasis to the peritoneal surface al"
+    },
+    {
+      "query_id": "colorectal_005",
+      "query": "MSI-H dMMR colorectal pembrolizumab checkpoint inhibitor",
+      "cancer_type": "Colorectal",
+      "expected_section": "KEY BIOMARKERS FOR COLORECTAL CANCER",
+      "expected_keywords": [
+        "dMMR",
+        "MSI-H",
+        "Pembrolizumab"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 431,
+      "retrieved_preview": "[SOURCE: colorectal_staging.txt | SECTION: KEY BIOMARKERS FOR COLORECTAL CANCER]\nMismatch Repair / Microsatellite Status:\n  dMMR (Mismatch Repair Deficient) / MSI-H (Microsatellite Instability High):\n    - Detected by IHC (loss of MLH1, PMS2, MSH2, or MSH6 expression) or PCR/NGS.\n    - Predicts bene"
+    },
+    {
+      "query_id": "colorectal_006",
+      "query": "KRAS NRAS mutation RAS RAF colorectal cetuximab resistance",
+      "cancer_type": "Colorectal",
+      "expected_section": "KEY BIOMARKERS FOR COLORECTAL CANCER",
+      "expected_keywords": [
+        "KRAS",
+        "NRAS",
+        "cetuximab",
+        "RESISTANCE"
+      ],
+      "recall_hit": true,
+      "recall": 1.0,
+      "mrr": 1.0,
+      "context_precision": 0.5,
+      "faithfulness_t1": 1.0,
+      "faithfulness_t1_error": null,
+      "faithfulness_t2": {
+        "faithful": null,
+        "score": null,
+        "evidence": "GEMINI_API_KEY not set \u2014 LLM judge skipped (Tier 1 passed).",
+        "tier": "skipped"
+      },
+      "latency_ms": 437,
+      "retrieved_preview": "[SOURCE: colorectal_staging.txt | SECTION: KEY BIOMARKERS FOR COLORECTAL CANCER]\nRAS/RAF Mutations (Predictive \u2014 anti-EGFR therapy):\n  KRAS exons 2, 3, 4 (codons 12, 13, 59, 61, 117, 146): Mutant RAS predicts RESISTANCE to cetuximab/panitumumab.\n  NRAS exons 2, 3, 4: Same as KRAS.\n  BRAF V600E mutat"
+    }
+  ]
+}
