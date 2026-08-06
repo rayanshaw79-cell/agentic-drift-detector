@@ -45,7 +45,45 @@ _collection = None
 
 # ── Cancer-type inference ──────────────────────────────────────────────────────
 
+_nlp = None
+
+def _get_ner_pipeline():
+    global _nlp
+    if _nlp is None:
+        try:
+            import spacy
+            # Load a lightweight NER model, disable unnecessary pipes for speed
+            _nlp = spacy.load("en_core_web_sm", disable=["parser", "attribute_ruler", "lemmatizer"])
+            # Add basic rules to catch cancer terminology if the standard model misses them
+            ruler = _nlp.add_pipe("entity_ruler", before="ner")
+            patterns = [
+                {"label": "CANCER_TYPE", "pattern": [{"LOWER": {"IN": ["lung", "breast", "colorectal", "brain", "skin", "prostate", "pancreatic"]}}, {"LOWER": "cancer", "OP": "?"}]},
+                {"label": "CANCER_TYPE", "pattern": [{"LOWER": {"IN": ["melanoma", "glioblastoma", "carcinoma", "nsclc", "sclc"]}}]},
+            ]
+            ruler.add_patterns(patterns)
+        except Exception as e:
+            log.warning(f"[RAG] Failed to initialize NER pipeline: {e}")
+            _nlp = "FAILED"
+    return _nlp
+
 def _infer_cancer_type(query: str) -> str | None:
+    # 1. Attempt NER Extraction
+    nlp = _get_ner_pipeline()
+    if nlp and nlp != "FAILED":
+        doc = nlp(query)
+        for ent in doc.ents:
+            if ent.label_ == "CANCER_TYPE":
+                text = ent.text.lower()
+                # Map extracted entity to standardized types
+                if any(kw in text for kw in ("lung", "nsclc", "sclc")): return "Lung"
+                if any(kw in text for kw in ("breast", "mammary")): return "Breast"
+                if any(kw in text for kw in ("colorectal", "colon", "rectal")): return "Colorectal"
+                if any(kw in text for kw in ("brain", "glioblastoma")): return "Brain"
+                if any(kw in text for kw in ("skin", "melanoma")): return "Skin"
+                # If it's another cancer type found by NER, return it capitalized
+                return ent.text.title()
+
+    # 2. Fallback to Simple Heuristic
     q = query.lower()
     if any(kw in q for kw in ("lung", "nsclc", "sclc", "pulmonary", "bronch")):
         return "Lung"
@@ -53,6 +91,7 @@ def _infer_cancer_type(query: str) -> str | None:
         return "Breast"
     if any(kw in q for kw in ("colorectal", "colon", "rectal", "sigmoid", "kras", "nras", "msi")):
         return "Colorectal"
+    
     return None
 
 
