@@ -1,0 +1,17 @@
+━━━
+# ICMR Preventive Screening Guidelines
+━━━
+
+## TOBACCO USERS (SMOKING, GUTKA, BEEDI, BETEL NUT)
+- Annual oral cavity examination by a healthcare professional.
+- Low-dose computed tomography (LDCT) for high-risk smokers (age > 50, > 20 pack-years).
+- Counseling for tobacco cessation at every visit.
+
+## ARSENIC EXPOSURE (GROUNDWATER)
+- Annual dermatological examination for hyperkeratosis and skin lesions.
+- Routine urinalysis for hematuria (bladder cancer risk).
+
+## GENERAL POPULATION (AGE > 40)
+- Breast: Annual clinical breast examination and biennial mammography.
+- Cervical: HPV testing every 5 years or Pap smear every 3 years.
+- Colorectal: Fecal immunochemical test (FIT) annually or colonoscopy every 10 years for average-risk individuals.

@@ -58,6 +58,12 @@ class ClinicalState(TypedDict, total=False):
     sdoh_risk_score: Optional[float]     # Underlying float probability from ML
     sdoh_shap_factors: Optional[List[dict]] # Top drivers from SHAP explanation
 
+    # ── Preventive Oncology (Project ASHA-AI MVP) ─────────────────────────────
+    patient_id: Optional[str]
+    lifestyle_factors: Optional[List[dict]] # Extracted from ASHA worker notes (e.g., tobacco, arsenic)
+    lifestyle_risk_score: Optional[float]   # Calculated drift risk
+    preventive_recommendations: Optional[str] # LLM generated output based on guidelines
+
     # ── Oncology Specific Fields (Harmony & PRISM) ─────────────────────────────
     # Extracted from pathology / clinical notes
     document_type: Optional[str]         # From Constellation Router: pathology_report | radiology | genomics | progress_note | unknown

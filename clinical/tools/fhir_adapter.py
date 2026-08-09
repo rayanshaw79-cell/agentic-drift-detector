@@ -169,3 +169,138 @@ def generate_synthetic_patient_chart(condition: str = "Non-Small Cell Lung Cance
             {"date": "2026-07-20", "doc_type": "Follow-up CT #2", "summary": "Lesion further reduced to 28mm (-33.3%). Partial Response (PR).", "target_lesion_mm": 28.0}
         ]
     }
+
+
+def export_preventive_state_to_fhir(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Converts extracted ASHA Preventive Oncology state into an HL7 FHIR R4 JSON Bundle.
+
+    Resources included in Bundle:
+      - Patient
+      - RiskAssessment (Overall lifestyle cancer risk score)
+      - Observation (for each extracted lifestyle factor: tobacco, arsenic, beedi, etc.)
+      - ServiceRequest (ICMR Grounded Preventive Screening referrals)
+    """
+    import json
+    patient_id = state.get("patient_id") or state.get("record_id") or f"pat-{str(uuid.uuid4())[:8]}"
+    fhir_patient_id = f"Patient-{patient_id}"
+
+    entries = [
+        {
+            "fullUrl": f"urn:uuid:{fhir_patient_id}",
+            "resource": {
+                "resourceType": "Patient",
+                "id": fhir_patient_id,
+                "active": True,
+                "text": {"status": "generated", "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">ASHA Preventive Patient Record</div>"}
+            }
+        }
+    ]
+
+    # 1. FHIR RiskAssessment Resource
+    risk_score = state.get("lifestyle_risk_score", 0.0)
+    risk_assessment_id = f"RiskAssessment-{patient_id}"
+    risk_resource = {
+        "resourceType": "RiskAssessment",
+        "id": risk_assessment_id,
+        "status": "final",
+        "subject": {"reference": f"Patient/{fhir_patient_id}"},
+        "occurrenceDateTime": datetime.now().isoformat(),
+        "prediction": [
+            {
+                "outcome": {
+                    "coding": [
+                        {
+                            "system": "http://snomed.info/sct",
+                            "code": "363346000",
+                            "display": "Malignant neoplastic disease (risk)"
+                        }
+                    ],
+                    "text": "Preventive Oncology Cancer Risk"
+                },
+                "probabilityDecimal": float(risk_score),
+                "qualitativeRisk": {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/risk-probability",
+                            "code": "high" if risk_score > 0.5 else "low",
+                            "display": "High Risk" if risk_score > 0.5 else "Low Risk"
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+    entries.append({"fullUrl": f"urn:uuid:{risk_assessment_id}", "resource": risk_resource})
+
+    # 2. FHIR Observation Resources (for each lifestyle risk factor)
+    factors = state.get("lifestyle_factors") or []
+    if isinstance(factors, str) and factors.startswith("["):
+        try:
+            factors = json.loads(factors)
+        except Exception:
+            factors = []
+
+    for idx, f in enumerate(factors if isinstance(factors, list) else []):
+        if not isinstance(f, dict):
+            continue
+        term = f.get("term", "unknown")
+        post = f.get("posterior", 0.0)
+        obs_id = f"Observation-Lifestyle-{patient_id}-{idx+1}"
+
+        obs_resource = {
+            "resourceType": "Observation",
+            "id": obs_id,
+            "status": "final",
+            "category": [
+                {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                            "code": "social-history",
+                            "display": "Social History"
+                        }
+                    ]
+                }
+            ],
+            "code": {
+                "text": f"Lifestyle Cancer Risk Factor: {term.capitalize()}"
+            },
+            "subject": {"reference": f"Patient/{fhir_patient_id}"},
+            "valueQuantity": {
+                "value": round(float(post), 4),
+                "unit": "posterior probability",
+                "system": "http://unitsofmeasure.org",
+                "code": "1"
+            }
+        }
+        entries.append({"fullUrl": f"urn:uuid:{obs_id}", "resource": obs_resource})
+
+    # 3. FHIR ServiceRequest Resource (Screening referral)
+    recs = state.get("preventive_recommendations")
+    if recs:
+        req_id = f"ServiceRequest-Screening-{patient_id}"
+        req_resource = {
+            "resourceType": "ServiceRequest",
+            "id": req_id,
+            "status": "active",
+            "intent": "proposal",
+            "subject": {"reference": f"Patient/{fhir_patient_id}"},
+            "code": {
+                "text": "ICMR Preventive Cancer Screening Protocol"
+            },
+            "patientInstruction": recs
+        }
+        entries.append({"fullUrl": f"urn:uuid:{req_id}", "resource": req_resource})
+
+    bundle = {
+        "resourceType": "Bundle",
+        "id": f"Bundle-Preventive-{patient_id}",
+        "type": "collection",
+        "timestamp": datetime.now().isoformat(),
+        "total": len(entries),
+        "entry": entries
+    }
+
+    log.info("[FHIR R4 PREVENTIVE] Exported %d resources into FHIR Bundle for Patient/%s", len(entries), patient_id)
+    return bundle

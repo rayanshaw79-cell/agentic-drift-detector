@@ -67,6 +67,9 @@ _MIGRATIONS = [
     ("human_notes",          "TEXT DEFAULT NULL"),
     ("reviewed_by",          "TEXT DEFAULT NULL"),
     ("icd10_codes_json",     "TEXT DEFAULT NULL"),
+    ("patient_id",           "TEXT DEFAULT NULL"),
+    ("lifestyle_risk_score", "REAL DEFAULT 0.0"),
+    ("lifestyle_factors",    "TEXT DEFAULT '[]'"),
 ]
 
 _INSERT = """
@@ -75,8 +78,9 @@ _INSERT = """
         step_count, retry_count, path_taken, execution_time_ms,
         drift_score, risk_level, workflow_type, overall_confidence,
         unresolved_count, total_entities, ml_explanation, privacy_leak_risk,
-        sdoh_risk_label, sdoh_risk_score, sdoh_shap_factors
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        sdoh_risk_label, sdoh_risk_score, sdoh_shap_factors,
+        patient_id, lifestyle_risk_score, lifestyle_factors
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 _BASELINE_QUERY = """
@@ -162,7 +166,10 @@ def save_execution_state(
         state.get("privacy_leak_risk", 0.0),
         state.get("sdoh_risk_label"),
         state.get("sdoh_risk_score"),
-        json.dumps(state.get("sdoh_shap_factors", []))
+        json.dumps(state.get("sdoh_shap_factors", [])),
+        state.get("patient_id"),
+        state.get("lifestyle_risk_score", 0.0),
+        json.dumps(state.get("lifestyle_factors", []))
     )
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(_INSERT, values)

@@ -67,13 +67,15 @@ _INSERT = """
         step_count, retry_count, path_taken, execution_time_ms,
         drift_score, risk_level, workflow_type, overall_confidence,
         unresolved_count, total_entities, ml_explanation, privacy_leak_risk,
-        sdoh_risk_label, sdoh_risk_score, sdoh_shap_factors
+        sdoh_risk_label, sdoh_risk_score, sdoh_shap_factors,
+        patient_id, lifestyle_risk_score, lifestyle_factors
     ) VALUES (
         %(tenant_id)s, %(incident_id)s, %(severity)s, %(decision)s, %(confidence)s,
         %(step_count)s, %(retry_count)s, %(path_taken)s, %(execution_time_ms)s,
         %(drift_score)s, %(risk_level)s, %(workflow_type)s, %(overall_confidence)s,
         %(unresolved_count)s, %(total_entities)s, %(ml_explanation)s, %(privacy_leak_risk)s,
-        %(sdoh_risk_label)s, %(sdoh_risk_score)s, %(sdoh_shap_factors)s
+        %(sdoh_risk_label)s, %(sdoh_risk_score)s, %(sdoh_shap_factors)s,
+        %(patient_id)s, %(lifestyle_risk_score)s, %(lifestyle_factors)s
     )
 """
 
@@ -183,6 +185,9 @@ def save_execution_state(
         "sdoh_risk_label":   state.get("sdoh_risk_label"),
         "sdoh_risk_score":   state.get("sdoh_risk_score"),
         "sdoh_shap_factors": Json(state.get("sdoh_shap_factors", [])),
+        "patient_id":        state.get("patient_id"),
+        "lifestyle_risk_score": state.get("lifestyle_risk_score", 0.0),
+        "lifestyle_factors": Json(state.get("lifestyle_factors", [])),
     }
 
     with _get_conn() as conn:

@@ -2,6 +2,8 @@ import json
 import os
 import sqlite3
 import time
+import uuid
+from typing import Any, cast
 from dotenv import load_dotenv
 
 import pandas as pd
@@ -144,13 +146,14 @@ def _load_postgres(tenant_id: str) -> pd.DataFrame:
                 SELECT incident_id, severity, decision, confidence, step_count,
                        retry_count, path_taken, execution_time_ms,
                        drift_score, risk_level, created_at, ml_explanation,
-                       sdoh_risk_label, sdoh_risk_score, sdoh_shap_factors
+                       sdoh_risk_label, sdoh_risk_score, sdoh_shap_factors,
+                       patient_id, lifestyle_risk_score, lifestyle_factors, preventive_recommendations
                 FROM executions
                 WHERE tenant_id = %s
                 ORDER BY created_at DESC
                 LIMIT 500
                 """,
-                conn,
+                cast(Any, conn),
                 params=(tenant_id,),
             )
         # Normalise path_taken (JSONB → JSON string for .str.contains())
@@ -213,14 +216,23 @@ with st.sidebar:
     st.markdown("### 🔬 Workflow")
     workflow_mode = st.radio(
         "Active Workflow",
-        options=["Incident Triage", "Clinical Coding"],
-        index=0,
+        options=["Incident Triage", "Clinical Coding", "Preventive Screening"],
+        index=2,
         label_visibility="collapsed",
         horizontal=True,
     )
     IS_CLINICAL = workflow_mode == "Clinical Coding"
+    IS_PREVENTIVE = workflow_mode == "Preventive Screening"
 
-    # ── Clinical file upload ──────────────────────────────────────────────────
+    # ── Tenant selector (PostgreSQL mode only) ────────────────────────────────
+    if USE_POSTGRES:
+        st.markdown("### 🏢 Tenant")
+        tenants = get_tenants()
+        selected_tenant = st.selectbox("Active Tenant", tenants, index=0, label_visibility="collapsed")
+    else:
+        selected_tenant = "default"
+
+    # ── Clinical & Preventive Sandbox Inputs ──────────────────────────────────
     uploaded_note: str | None = None
     if IS_CLINICAL:
         st.markdown("### 📄 Upload Clinical Note")
@@ -245,18 +257,75 @@ with st.sidebar:
                 st.cache_data.clear()
                 st.rerun()
 
-    # ── Tenant selector (PostgreSQL mode only) ────────────────────────────────
-    if USE_POSTGRES:
-        st.markdown("### 🏢 Tenant")
-        tenants = get_tenants()
-        selected_tenant = st.selectbox("Active Tenant", tenants, index=0, label_visibility="collapsed")
-    else:
-        selected_tenant = "default"
+    elif IS_PREVENTIVE:
+        st.markdown("### 📄 ASHA Field Report Sandbox")
+        sample_choice = st.selectbox(
+            "Select Sample Report",
+            [
+                "Malwa Region (Gutka, Beedi, Arsenic)",
+                "🇮🇳 Hinglish: Khaini & Bidi (Rural Male)",
+                "🇮🇳 Hinglish: Supari & Pan Masala (Oral Patch)",
+                "Rural Female (Betel nut, High BMI)",
+                "Oral Cancer Risk (Supari, Pan Masala)",
+                "Custom Report"
+            ]
+        )
+        sample_notes = {
+            "Malwa Region (Gutka, Beedi, Arsenic)": "ASHA field report: 45 year old male in Malwa region. Patient reports chronic cough and shortness of breath. Confirms daily use of tobacco chewing (gutka) and occasional beedi smoking. High levels of arsenic reported in local groundwater.",
+            "🇮🇳 Hinglish: Khaini & Bidi (Rural Male)": "ASHA field report: Patient 45 saal. Patient 10 saal se khaini aur bidi pita hai. Gala me dard aur persistent khansi hai. Gaon me peene ka paani kharab hai (arsenic exposure).",
+            "🇮🇳 Hinglish: Supari & Pan Masala (Oral Patch)": "ASHA field report: 48 saal female. Daily supari aur pan masala chabati hai. Oral cavity exam me gala me safed daag (leukoplakia patch) dikha hai.",
+            "Rural Female (Betel nut, High BMI)": "ASHA field report: 48 year old female in Sangrur district. No smoking or alcohol history. Regular chewing of betel nut (supari). BMI calculated at 31.2 kg/m2 (Obesity Class I). Due for routine screening.",
+            "Oral Cancer Risk (Supari, Pan Masala)": "ASHA field report: 52 year old male farmer. History of pan masala chewing for 15 years. Presents with persistent white patch (leukoplakia) on right buccal mucosa.",
+            "Custom Report": ""
+        }
+        initial_text = sample_notes.get(sample_choice, "")
+        asha_note_input = st.text_area("ASHA Field Note", value=initial_text, height=120)
+        if st.button("▶ Run Preventive Risk Assessment", use_container_width=True, type="primary"):
+            if not asha_note_input.strip():
+                st.warning("Please enter or select an ASHA field report.")
+            else:
+                with st.spinner("Running ASHA-AI Bayesian Risk Engine & RAG Grounding..."):
+                    from workflows.preventive_screening import preventive_screening_workflow
+                    from telemetry.store import save_execution_state
+                    
+                    patient_id = f"PAT-PUNJAB-{uuid.uuid4().hex[:4].upper()}"
+                    initial_state = {
+                        "record_id": patient_id,
+                        "patient_id": patient_id,
+                        "raw_note": asha_note_input,
+                        "current_step": "init",
+                        "step_count": 0,
+                        "retry_count": 0,
+                        "path_taken": [],
+                        "execution_time_ms": 0,
+                        "lifestyle_factors": [],
+                        "lifestyle_risk_score": 0.0,
+                        "preventive_recommendations": None
+                    }
+                    final_state = preventive_screening_workflow(initial_state)
+                    analysis = {
+                        "workflow_type": "preventive_screening",
+                        "risk_level": "high_risk" if final_state.get("lifestyle_risk_score", 0) > 0.5 else "healthy",
+                        "drift_score": int(final_state.get("lifestyle_risk_score", 0) * 100)
+                    }
+                    save_execution_state(final_state, analysis=analysis, tenant_id=selected_tenant)
+                st.toast("✅ Risk Assessment Complete! Telemetry Logged.")
+                st.cache_data.clear()
+                st.rerun()
 
     st.markdown("### ⚙️ Filters")
     min_score = st.slider("Min Drift Score", 0, 100, 0)
     
-    if IS_CLINICAL:
+    if IS_PREVENTIVE:
+        severity_filter = []
+        decision_filter = []
+        risk_tier_filter = st.multiselect(
+            "Risk Tier",
+            ["healthy", "high_risk"],
+            default=["healthy", "high_risk"]
+        )
+    elif IS_CLINICAL:
+        risk_tier_filter = []
         severity_filter = []
         decision_filter = st.multiselect(
             "Decision", 
@@ -264,6 +333,7 @@ with st.sidebar:
             default=["complete", "requires_clinical_review"]
         )
     else:
+        risk_tier_filter = []
         severity_filter = st.multiselect(
             "Severity", ["low", "medium", "high"], default=["low", "medium", "high"]
         )
@@ -302,24 +372,38 @@ if auto_refresh:
 # ── Load & Filter ─────────────────────────────────────────────────────────────
 df_raw = load_data(selected_tenant)
 
-# Filter by workflow type if clinical mode is selected
+# Filter by workflow type
 if not df_raw.empty and "workflow_type" in df_raw.columns:
-    workflow_type_filter = "clinical_coding" if IS_CLINICAL else "incident_triage"
-    df_raw = df_raw[df_raw["workflow_type"] == workflow_type_filter]
+    if IS_PREVENTIVE:
+        df_raw = df_raw[df_raw["workflow_type"] == "preventive_screening"]
+    elif IS_CLINICAL:
+        df_raw = df_raw[df_raw["workflow_type"] == "clinical_coding"]
+    else:
+        df_raw = df_raw[df_raw["workflow_type"] == "incident_triage"]
 
 if df_raw.empty:
-    st.title("🧠 Agentic Drift Detector")
-    if IS_CLINICAL:
+    if IS_PREVENTIVE:
+        st.title("🛡️ ASHA-AI Preventive Screening")
+        st.info(
+            "👋 **Welcome to ASHA-AI Preventive Oncology!**\n\n"
+            "No screening telemetry records match your current database.\n\n"
+            "👉 **Click '▶ Run Preventive Risk Assessment' in the left sidebar sandbox** "
+            "to run your first live Bayesian risk evaluation and populate the dashboard with ICMR guidelines!"
+        )
+    elif IS_CLINICAL:
+        st.title("🧠 Agentic Drift Detector")
         backend_hint = (
             "No clinical coding data found. Run:\n"
             "```bash\npython -m clinical.run_clinical --simulate-batch 20\n```"
             "\nor upload a clinical note using the sidebar."
         )
+        st.warning(backend_hint)
     elif USE_POSTGRES:
-        backend_hint = f"No data found for tenant **{selected_tenant}** in PostgreSQL."
+        st.title("🧠 Agentic Drift Detector")
+        st.warning(f"No data found for tenant **{selected_tenant}** in PostgreSQL.")
     else:
-        backend_hint = "No telemetry data found. Run `python run.py --simulate-batch 50`."
-    st.warning(backend_hint)
+        st.title("🧠 Agentic Drift Detector")
+        st.warning("No telemetry data found. Run `python run.py --simulate-batch 50`.")
     st.stop()
 
 df = df_raw.copy()
@@ -328,6 +412,8 @@ if severity_filter:
     df = df[df["severity"].isin(severity_filter)]
 if decision_filter:
     df = df[df["decision"].isin(decision_filter)]
+if IS_PREVENTIVE and risk_tier_filter and "risk_level" in df.columns:
+    df = df[df["risk_level"].isin(risk_tier_filter)]
 
 total = len(df)
 if total == 0:
@@ -338,15 +424,19 @@ if total == 0:
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
     tenant_badge = f'<span class="tenant-badge">{selected_tenant}</span>' if USE_POSTGRES else ""
-    workflow_label = "⚕️ Clinical Coding" if IS_CLINICAL else "🧠 Incident Triage"
+    if IS_PREVENTIVE:
+        workflow_label = "🛡️ ASHA-AI Preventive Screening"
+        sub_label = "Population risk factor extraction & ICMR preventive guideline grounding."
+    elif IS_CLINICAL:
+        workflow_label = "⚕️ Clinical Coding"
+        sub_label = "ICD-10 clinical coding observability — behavioral safety for medical AI."
+    else:
+        workflow_label = "🧠 Incident Triage"
+        sub_label = "Real-time behavioral observability for autonomous AI agent workflows."
     st.markdown(
         f"<h1 style='color:#e6edf3;font-size:26px;margin-bottom:4px;font-weight:700;'>"
-        f"{workflow_label} Drift Detector &nbsp;{tenant_badge}</h1>"
-        "<p style='color:#8b949e;font-size:14px;margin-top:0;'>"
-        + ("ICD-10 clinical coding observability — behavioral safety for medical AI."
-           if IS_CLINICAL else
-           "Real-time behavioral observability for autonomous AI agent workflows.")
-        + "</p>",
+        f"{workflow_label} &nbsp;{tenant_badge}</h1>"
+        f"<p style='color:#8b949e;font-size:14px;margin-top:0;'>{sub_label}</p>",
         unsafe_allow_html=True,
     )
 with col_h2:
@@ -368,27 +458,51 @@ heal_count  = (
 high_risk_ct = (df["risk_level"] == "high_risk").sum() if "risk_level" in df.columns else 0
 
 c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
-metric_card(c1, "Total Runs",      f"{total:,}")
-metric_card(c2, "Avg Drift Score", f"{avg_drift:.1f}",  sub="0 = perfect")
-metric_card(c3, "Avg Latency",     f"{avg_latency:.2f}s")
+metric_card(c1, "Total Screenings" if IS_PREVENTIVE else "Total Runs", f"{total:,}")
 
-if IS_CLINICAL:
-    # Clinical-specific KPIs
+if IS_PREVENTIVE:
+    avg_risk = df["lifestyle_risk_score"].mean() if "lifestyle_risk_score" in df.columns else 0.0
+    high_risk_ct = (df["risk_level"] == "high_risk").sum() if "risk_level" in df.columns else 0
+    
+    # Aggregate top risk factor
+    all_factors = []
+    if "lifestyle_factors" in df.columns:
+        for val in df["lifestyle_factors"].dropna():
+            try:
+                factors_list = json.loads(val) if isinstance(val, str) else val
+                if isinstance(factors_list, list):
+                    for f in factors_list:
+                        if isinstance(f, dict) and "term" in f:
+                            all_factors.append(f["term"])
+            except Exception:
+                pass
+    top_factor = pd.Series(all_factors).mode()[0].capitalize() if all_factors else "None"
+
+    metric_card(c2, "Avg Risk Score", f"{avg_risk:.2f}", sub="0.0 - 1.0 scale")
+    metric_card(c3, "Avg Latency",    f"{avg_latency:.2f}s")
+    metric_card(c4, "High Risk Count",f"{high_risk_ct:,}", sub="score > 0.5")
+    metric_card(c5, "Top Risk Factor",f"{top_factor}",     sub="modal factor")
+    metric_card(c6, "Guidelines Set", "ICMR 2026",        sub="India stds")
+    metric_card(c7, "High-Risk Runs", f"{high_risk_ct:,}", sub="score ≥ 0.5")
+elif IS_CLINICAL:
+    metric_card(c2, "Avg Drift Score", f"{avg_drift:.1f}",  sub="0 = perfect")
+    metric_card(c3, "Avg Latency",     f"{avg_latency:.2f}s")
     avg_conf = df["overall_confidence"].mean() if "overall_confidence" in df.columns else 0
     review_ct = (df["decision"] == "requires_clinical_review").sum() if "decision" in df.columns else 0
     avg_privacy = df["privacy_leak_risk"].mean() if "privacy_leak_risk" in df.columns else 0
-    
     metric_card(c4, "Avg Confidence",  f"{avg_conf:.2f}",   sub="coding accuracy")
     metric_card(c5, "Human Review",    f"{review_ct:,}",    sub="clinical_intervention")
     metric_card(c6, "De-ID Leak Risk", f"{avg_privacy:.2f}",sub="0 = safe")
+    metric_card(c7, "High-Risk Runs",  f"{high_risk_ct:,}", sub="score ≥ 60")
 else:
+    metric_card(c2, "Avg Drift Score", f"{avg_drift:.1f}",  sub="0 = perfect")
+    metric_card(c3, "Avg Latency",     f"{avg_latency:.2f}s")
     esc_rate = (df["decision"] == "escalate").mean() * 100
     metric_card(c4, "Escalation Rate", f"{esc_rate:.1f}%")
     metric_card(c5, "Healing Events",  f"{heal_count:,}",   sub="intervention node")
-    # c6 is intentionally left blank for Incident Triage to keep alignment
     metric_card(c6, "-", "-")
+    metric_card(c7, "High-Risk Runs",  f"{high_risk_ct:,}", sub="score ≥ 60")
 
-metric_card(c7, "High-Risk Runs",  f"{high_risk_ct:,}", sub="score ≥ 60")
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ── Charts Row 1 ──────────────────────────────────────────────────────────────
@@ -517,8 +631,170 @@ st.dataframe(
     },
 )
 
-# ── Population Insights (Clinical Coding mode — Miimansa RWE pipeline) ────────
-if IS_CLINICAL:
+# ── Population Insights (Clinical Coding & Preventive Screening) ─────────────
+if IS_PREVENTIVE:
+    st.markdown("---")
+    st.markdown(
+        "<div class='section-title'>🛡️ ASHA Population Health & Preventive Analytics</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Aggregated lifestyle risk statistics & ICMR guideline matching across rural populations. "
+        "Empowers ASHA workers with early cancer risk detection and intervention protocols."
+    )
+
+    prev_col1, prev_col2 = st.columns(2)
+
+    with prev_col1:
+        st.markdown("<div class='section-title'>📊 Risk Factor Prevalence in Community</div>", unsafe_allow_html=True)
+        all_factors_list = []
+        if "lifestyle_factors" in df.columns:
+            for val in df["lifestyle_factors"].dropna():
+                try:
+                    f_items = json.loads(val) if isinstance(val, str) else val
+                    if isinstance(f_items, list):
+                        for item in f_items:
+                            if isinstance(item, dict) and "term" in item:
+                                all_factors_list.append(item["term"].capitalize())
+                except Exception:
+                    pass
+
+        if all_factors_list:
+            factor_series = pd.Series(all_factors_list).value_counts().reset_index()
+            factor_series.columns = ["Factor", "Count"]
+            fig_prev_factors = px.bar(
+                factor_series, x="Count", y="Factor", orientation="h",
+                color="Factor", color_discrete_sequence=["#58a6ff", "#d29922", "#f85149", "#bc8cff", "#3fb950"],
+                text="Count"
+            )
+            fig_prev_factors.update_traces(textposition="outside", textfont_color="#e6edf3")
+            fig_prev_factors.update_layout(**PLOTLY_LAYOUT, height=240, showlegend=False)
+            st.plotly_chart(fig_prev_factors, use_container_width=True)
+        else:
+            st.info("No lifestyle risk factors recorded yet. Run a risk assessment in the sidebar.")
+
+    with prev_col2:
+        st.markdown("<div class='section-title'>🔰 Patient Risk Severity Breakdown</div>", unsafe_allow_html=True)
+        if "risk_level" in df.columns:
+            p_risk_counts = df["risk_level"].value_counts().reset_index()
+            p_risk_counts.columns = ["Risk Tier", "Count"]
+            color_map = {"healthy": "#3fb950", "high_risk": "#f85149"}
+            fig_prev_risk = px.pie(
+                p_risk_counts, names="Risk Tier", values="Count", hole=0.4,
+                color="Risk Tier", color_discrete_map=color_map,
+                title="Population Risk Tiers"
+            )
+            fig_prev_risk.update_layout(**PLOTLY_LAYOUT, height=240)
+            st.plotly_chart(fig_prev_risk, use_container_width=True)
+
+    # ── Longitudinal Patient Risk Trajectory Section ─────────────────────────
+    st.markdown("---")
+    st.markdown("<div class='section-title'>📈 Longitudinal Patient Risk Trajectories (Health Drift)</div>", unsafe_allow_html=True)
+    st.caption("Tracks how individual patient risk scores evolve over time across multiple ASHA field visits.")
+
+    if "patient_id" in df.columns and "lifestyle_risk_score" in df.columns and "created_at" in df.columns:
+        valid_traj_df = df.dropna(subset=["patient_id", "lifestyle_risk_score"]).copy()
+        if not valid_traj_df.empty:
+            valid_traj_df["created_at"] = pd.to_datetime(valid_traj_df["created_at"])
+            valid_traj_df = valid_traj_df.sort_values("created_at")
+
+            patient_list = valid_traj_df["patient_id"].unique().tolist()
+            if patient_list:
+                c_sel1, c_sel2 = st.columns([1, 2])
+                with c_sel1:
+                    selected_patient = st.selectbox("Select Patient to Track Trajectory", patient_list)
+                with c_sel2:
+                    p_records = valid_traj_df[valid_traj_df["patient_id"] == selected_patient]
+                    latest_record = p_records.iloc[-1].to_dict()
+                    
+                    from clinical.tools.fhir_adapter import export_preventive_state_to_fhir
+                    fhir_json = export_preventive_state_to_fhir(latest_record)
+                    
+                    st.download_button(
+                        label="📥 Download Patient FHIR R4 Bundle (JSON)",
+                        data=json.dumps(fhir_json, indent=2),
+                        file_name=f"fhir_{selected_patient}.json",
+                        mime="application/json",
+                        use_container_width=True
+                    )
+
+                # Render Line Chart of patient risk score trajectory
+                p_data = valid_traj_df[valid_traj_df["patient_id"] == selected_patient]
+                fig_traj = go.Figure()
+                fig_traj.add_trace(go.Scatter(
+                    x=p_data["created_at"],
+                    y=p_data["lifestyle_risk_score"],
+                    mode="lines+markers",
+                    name="Synergistic Risk Score",
+                    line=dict(color=COLORS["blue"], width=3),
+                    marker=dict(size=8, color=COLORS["purple"]),
+                    hovertemplate="Date: %{x}<br>Risk Score: %{y:.2f}<extra></extra>"
+                ))
+                fig_traj.add_hrect(
+                    y0=0.5, y1=1.0, fillcolor="rgba(248,81,73,0.08)", line_width=0,
+                    annotation_text="High Risk Threshold", annotation_position="top left",
+                    annotation_font_color=COLORS["red"]
+                )
+                fig_traj.update_layout(
+                    **PLOTLY_LAYOUT,
+                    title=dict(text=f"Risk Score Trajectory for Patient {selected_patient}", font=dict(color=COLORS["text"], size=13)),
+                    height=260,
+                    yaxis=dict(range=[0, 1.05], gridcolor=COLORS["border"]),
+                    xaxis=dict(gridcolor=COLORS["border"])
+                )
+                st.plotly_chart(fig_traj, use_container_width=True)
+
+    # ── ASHA Detailed Patient Inspector ──────────────────────────────────────
+    st.markdown("---")
+    st.markdown("<div class='section-title'>👤 ASHA Patient Guideline Inspector</div>", unsafe_allow_html=True)
+    st.caption("Inspect individual patient risk scores, Bayesian entity votes, and RAG-retrieved ICMR guidelines.")
+    
+    inspect_df = df.head(20)
+    for idx, row in inspect_df.iterrows():
+        pat_id = row.get("patient_id") or row.get("incident_id") or f"PAT-{idx}"
+        r_score = row.get("lifestyle_risk_score", 0.0)
+        risk_lvl = row.get("risk_level", "healthy")
+        badge_style = "badge-high" if r_score > 0.5 else "badge-healthy"
+        
+        with st.expander(f"📌 Patient: {pat_id} | Risk Score: {r_score:.2f} ({row.get('created_at','Recent')})"):
+            c_p1, c_p2 = st.columns([1, 2])
+            with c_p1:
+                st.markdown(
+                    f"<div style='background:#1c2230;padding:12px;border-radius:8px;border:1px solid #2d3348;'>"
+                    f"<div style='font-size:12px;color:#8b949e;'>PATIENT ID</div>"
+                    f"<div style='font-size:16px;font-weight:700;color:#e6edf3;'>{pat_id}</div>"
+                    f"<div style='font-size:12px;color:#8b949e;margin-top:8px;'>RISK LEVEL</div>"
+                    f"<span class='badge {badge_style}'>{risk_lvl.upper()}</span>"
+                    f"<div style='font-size:12px;color:#8b949e;margin-top:8px;'>LATENCY</div>"
+                    f"<div style='font-size:13px;color:#e6edf3;'>{row.get('execution_time_ms',0)} ms</div>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+            with c_p2:
+                # Unpack lifestyle factors
+                f_raw = row.get("lifestyle_factors")
+                factors = json.loads(f_raw) if isinstance(f_raw, str) and f_raw.startswith("[") else (f_raw if isinstance(f_raw, list) else [])
+                if factors:
+                    st.markdown("**🧬 Extracted Lifestyle Factors (Bayesian Posteriors & Ensemble Votes):**")
+                    for f in factors:
+                        if isinstance(f, dict):
+                            t = f.get("term", "").capitalize()
+                            post = f.get("posterior", 0.0)
+                            votes = f.get("votes", {})
+                            st.markdown(
+                                f"- **{t}**: Posterior Prob = `<b style='color:#58a6ff'>{post:.4f}</b>` | "
+                                f"Votes: Gemini=`{votes.get('gemini')}`, Regex=`{votes.get('regex')}`, NLM=`{votes.get('nlm')}`",
+                                unsafe_allow_html=True
+                            )
+                else:
+                    st.markdown("*No specific high-risk factors detected.*")
+
+            recs = row.get("preventive_recommendations")
+            if recs:
+                st.markdown("**📋 Grounded ICMR Screening Protocols (RAG Output):**")
+                st.info(recs)
+
+elif IS_CLINICAL:
     st.markdown("---")
     st.markdown(
         "<div class='section-title'>🧬 Population Insights — Real World Evidence</div>",

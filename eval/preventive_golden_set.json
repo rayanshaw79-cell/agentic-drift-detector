@@ -1,0 +1,65 @@
+[
+  {
+    "query_id": "prev_001",
+    "query": "preventive screening recommendations for tobacco users",
+    "cancer_type": "Preventive",
+    "expected_chunk_keywords": ["oral cavity examination", "tobacco cessation"],
+    "expected_section": "TOBACCO USERS",
+    "source_file": "preventive_screening.txt",
+    "notes": "Oral screening for tobacco chewing/smoking"
+  },
+  {
+    "query_id": "prev_002",
+    "query": "preventive screening recommendations for gutka users",
+    "cancer_type": "Preventive",
+    "expected_chunk_keywords": ["oral cavity examination", "tobacco"],
+    "expected_section": "TOBACCO USERS",
+    "source_file": "preventive_screening.txt",
+    "notes": "Gutka oral cavity screening lookup"
+  },
+  {
+    "query_id": "prev_003",
+    "query": "preventive screening recommendations for high-risk smokers",
+    "cancer_type": "Preventive",
+    "expected_chunk_keywords": ["Low-dose computed tomography", "LDCT"],
+    "expected_section": "TOBACCO USERS",
+    "source_file": "preventive_screening.txt",
+    "notes": "LDCT lung screening recommendation"
+  },
+  {
+    "query_id": "prev_004",
+    "query": "preventive screening for arsenic exposure groundwater",
+    "cancer_type": "Preventive",
+    "expected_chunk_keywords": ["dermatological examination", "urinalysis"],
+    "expected_section": "ARSENIC EXPOSURE",
+    "source_file": "preventive_screening.txt",
+    "notes": "Arsenic hyperkeratosis and skin/bladder screening"
+  },
+  {
+    "query_id": "prev_005",
+    "query": "preventive screening recommendations for breast cancer age > 40",
+    "cancer_type": "Preventive",
+    "expected_chunk_keywords": ["clinical breast examination", "mammography"],
+    "expected_section": "GENERAL POPULATION",
+    "source_file": "preventive_screening.txt",
+    "notes": "Breast cancer screening guidelines"
+  },
+  {
+    "query_id": "prev_006",
+    "query": "preventive screening recommendations for cervical cancer",
+    "cancer_type": "Preventive",
+    "expected_chunk_keywords": ["HPV testing", "Pap smear"],
+    "expected_section": "GENERAL POPULATION",
+    "source_file": "preventive_screening.txt",
+    "notes": "Cervical HPV & Pap smear guidelines"
+  },
+  {
+    "query_id": "prev_007",
+    "query": "preventive screening for colorectal cancer",
+    "cancer_type": "Preventive",
+    "expected_chunk_keywords": ["Fecal immunochemical test", "colonoscopy"],
+    "expected_section": "GENERAL POPULATION",
+    "source_file": "preventive_screening.txt",
+    "notes": "Colorectal FIT test guidelines"
+  }
+]

@@ -57,7 +57,12 @@ def _get_ner_pipeline():
             # Add basic rules to catch cancer terminology if the standard model misses them
             ruler = _nlp.add_pipe("entity_ruler", before="ner")
             patterns = [
-                {"label": "CANCER_TYPE", "pattern": [{"LOWER": {"IN": ["lung", "breast", "colorectal", "brain", "skin", "prostate", "pancreatic"]}}, {"LOWER": "cancer", "OP": "?"}]},
+                {"label": "CANCER_TYPE", "pattern": [{"lower": "colorectal"}, {"lower": "cancer", "OP": "?"}]},
+                {"label": "CANCER_TYPE", "pattern": [{"lower": "brain"}, {"lower": "cancer", "OP": "?"}]},
+                {"label": "CANCER_TYPE", "pattern": [{"lower": "skin"}, {"lower": "cancer", "OP": "?"}]},
+                {"label": "CANCER_TYPE", "pattern": [{"lower": "preventive"}]},
+                {"label": "CANCER_TYPE", "pattern": [{"lower": "screening"}]},
+                {"label": "CANCER_TYPE", "pattern": [{"LOWER": {"IN": ["lung", "breast", "prostate", "pancreatic"]}}, {"LOWER": "cancer", "OP": "?"}]},
                 {"label": "CANCER_TYPE", "pattern": [{"LOWER": {"IN": ["melanoma", "glioblastoma", "carcinoma", "nsclc", "sclc"]}}]},
             ]
             ruler.add_patterns(patterns)
@@ -80,6 +85,7 @@ def _infer_cancer_type(query: str) -> str | None:
                 if any(kw in text for kw in ("colorectal", "colon", "rectal")): return "Colorectal"
                 if any(kw in text for kw in ("brain", "glioblastoma")): return "Brain"
                 if any(kw in text for kw in ("skin", "melanoma")): return "Skin"
+                if any(kw in text for kw in ("preventive", "screening")): return "Preventive"
                 # If it's another cancer type found by NER, return it capitalized
                 return ent.text.title()
 

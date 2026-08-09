@@ -58,6 +58,11 @@ class PharmaCheckRequest(BaseModel):
     medications: List[str]
     raw_note: Optional[str] = ""
 
+class PreventiveRequest(BaseModel):
+    raw_note: str
+    patient_id: Optional[str] = None
+    tenant_id: Optional[str] = "default"
+
 class RafAuditRequest(BaseModel):
     icd10_codes: List[Dict[str, Any]]
     demographics: Optional[Dict[str, Any]] = None
@@ -145,6 +150,56 @@ def extract_clinical_data(req: ClinicalRequest):
         execution_time_ms=execution_time
     )
 
+# ── Preventive Oncology (Project ASHA-AI) Endpoints ─────────────────────────
+
+@app.post("/v1/preventive/risk-assess")
+def assess_preventive_risk(req: PreventiveRequest):
+    from workflows.preventive_screening import preventive_screening_workflow
+    
+    patient_id = req.patient_id or f"pat-{uuid.uuid4().hex[:8]}"
+    
+    initial_state = {
+        "record_id": patient_id, # using record_id for consistency in state
+        "patient_id": patient_id,
+        "raw_note": req.raw_note,
+        "current_step": "init",
+        "step_count": 0,
+        "retry_count": 0,
+        "path_taken": [],
+        "execution_time_ms": 0,
+        "lifestyle_factors": [],
+        "lifestyle_risk_score": 0.0,
+        "preventive_recommendations": None
+    }
+    
+    start_time = time.perf_counter()
+    try:
+        final_state = preventive_screening_workflow(initial_state)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+        
+    execution_time = int((time.perf_counter() - start_time) * 1000)
+    final_state["execution_time_ms"] = execution_time
+    
+    analysis = {
+        "workflow_type": "preventive_screening",
+        "risk_level": "high_risk" if final_state.get("lifestyle_risk_score", 0) > 0.5 else "healthy",
+        "drift_score": int(final_state.get("lifestyle_risk_score", 0) * 100)
+    }
+    
+    try:
+        save_execution_state(final_state, analysis=analysis, tenant_id=req.tenant_id)
+    except Exception as e:
+        print(f"Telemetry save failed: {e}")
+        
+    return {
+        "patient_id": final_state["patient_id"],
+        "lifestyle_risk_score": final_state.get("lifestyle_risk_score"),
+        "lifestyle_factors": final_state.get("lifestyle_factors"),
+        "preventive_recommendations": final_state.get("preventive_recommendations"),
+        "execution_time_ms": execution_time
+    }
+
 # ── SMART-on-FHIR R4 Adapter Endpoints ─────────────────────────────────────
 
 @app.post("/v1/clinical/fhir/export")
@@ -152,6 +207,12 @@ def export_fhir_bundle(state_data: Dict[str, Any]):
     """Export extracted clinical state into HL7 FHIR R4 JSON Bundle."""
     from clinical.tools.fhir_adapter import export_clinical_state_to_fhir
     return export_clinical_state_to_fhir(state_data)
+
+@app.post("/v1/preventive/fhir/export")
+def export_preventive_fhir_bundle(state_data: Dict[str, Any]):
+    """Export extracted ASHA preventive oncology state into HL7 FHIR R4 JSON Bundle."""
+    from clinical.tools.fhir_adapter import export_preventive_state_to_fhir
+    return export_preventive_state_to_fhir(state_data)
 
 @app.post("/v1/clinical/fhir/seed")
 def seed_synthetic_patient(condition: Optional[str] = "Non-Small Cell Lung Cancer"):
