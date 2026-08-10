@@ -739,9 +739,9 @@ if IS_PREVENTIVE:
                     **PLOTLY_LAYOUT,
                     title=dict(text=f"Risk Score Trajectory for Patient {selected_patient}", font=dict(color=COLORS["text"], size=13)),
                     height=260,
-                    yaxis=dict(range=[0, 1.05], gridcolor=COLORS["border"]),
-                    xaxis=dict(gridcolor=COLORS["border"])
                 )
+                fig_traj.update_yaxes(range=[0, 1.05], gridcolor=COLORS["border"])
+                fig_traj.update_xaxes(gridcolor=COLORS["border"])
                 st.plotly_chart(fig_traj, use_container_width=True)
 
     # ── ASHA Detailed Patient Inspector ──────────────────────────────────────
