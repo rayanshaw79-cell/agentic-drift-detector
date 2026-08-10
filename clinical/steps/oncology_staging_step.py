@@ -58,6 +58,33 @@ def _build_messages(
     return messages
 
 
+def _generate_dynamic_query(raw_note: str, document_type: str) -> str:
+    """Generate a highly targeted RAG query based on note heuristics."""
+    keywords = []
+    
+    # 1. Tumor size
+    import re
+    sizes = re.findall(r'\b(\d+\.?\d*\s*(?:cm|mm))\b', raw_note.lower())
+    if sizes:
+        keywords.append(f"{sizes[0]} tumor")
+        
+    # 2. Nodes
+    if re.search(r'\b(node|nodal|hilar|mediastinal|lymph)\b', raw_note.lower()):
+        keywords.append("lymph nodes")
+        
+    # 3. Mets
+    if re.search(r'\b(met|mets|metastasis|metastatic|spread)\b', raw_note.lower()):
+        keywords.append("metastasis")
+        
+    # 4. Invasion
+    if re.search(r'\b(pleura|pleural|invasion|invades|chest wall)\b', raw_note.lower()):
+        keywords.append("invasion")
+
+    base = document_type if document_type != "unknown" else "cancer staging"
+    if keywords:
+        return f"{base} TNM rules for " + ", ".join(keywords)
+    return f"{base} TNM AJCC"
+
 def oncology_staging_step(state: ClinicalState) -> dict:
     """
     Extracts TNM staging, primary site, and histology from raw_note.
@@ -87,8 +114,7 @@ def oncology_staging_step(state: ClinicalState) -> dict:
     rag_context: str | None = None
     try:
         from clinical.rag.guideline_store import retrieve_guidelines
-        # Use a rough query — the site may not be extracted yet
-        rag_query = document_type if document_type != "unknown" else "cancer staging TNM AJCC"
+        rag_query = _generate_dynamic_query(raw_note, document_type)
         rag_context = retrieve_guidelines(query=rag_query, k=2)
         if rag_context:
             log.debug("[STAGING] RAG context retrieved (%d chars)", len(rag_context))
@@ -133,6 +159,15 @@ def oncology_staging_step(state: ClinicalState) -> dict:
                     ev,
                 )
                 extracted["tnm_stage"] = None
+
+        if extracted.get("guideline_rationale") and rag_context:
+            rat = extracted["guideline_rationale"]
+            if rat not in rag_context:
+                log.warning(
+                    "[STAGING PROVENANCE FAILURE] Guideline rationale '%s' not in RAG context. Rejecting.",
+                    rat,
+                )
+                extracted["guideline_rationale"] = None
 
     except Exception as exc:
         log.warning("[ONCOLOGY STAGING] LLM extraction failed: %s", exc)

@@ -49,7 +49,8 @@ Schema:
     "M":            "M-component string | null",
     "overall":      "stage group string | null",
     "evidence_span":"exact quoted sentence from note | null"
-  }
+  },
+  "guideline_rationale": "exact quote from AUTHORITATIVE STAGING REFERENCE that justifies this staging | null"
 }
 """
 
@@ -86,7 +87,8 @@ pT2a pN1 pM0 — Stage IIB Non-Small Cell Lung Cancer
     "M": "pM0",
     "overall": "Stage IIB Non-Small Cell Lung Cancer",
     "evidence_span": "pT2a pN1 pM0 — Stage IIB Non-Small Cell Lung Cancer"
-  }
+  },
+  "guideline_rationale": null
 }""",
     ),
     # ── Example 2: Radiology note, no explicit TNM — implied Stage IV ─────────
@@ -123,7 +125,8 @@ Clinical staging: cT3 cN2 cM1b.
     "M": "cM1b",
     "overall": null,
     "evidence_span": "Clinical staging: cT3 cN2 cM1b."
-  }
+  },
+  "guideline_rationale": null
 }""",
     ),
     # ── Example 3: Progress note — stage mentioned narratively ────────────────
@@ -152,7 +155,8 @@ Continue neoadjuvant chemotherapy. Repeat staging CT after cycle 6.
     "M": null,
     "overall": "Stage IIIA",
     "evidence_span": "Stage IIIA\\nHer2-positive invasive ductal carcinoma of the left breast"
-  }
+  },
+  "guideline_rationale": null
 }""",
     ),
     # ── Example 4: Note with ONLY a history mention — no staging extractable ──
@@ -180,7 +184,8 @@ Acute pulmonary embolism. No evidence of recurrent malignancy on today's CT.
     "M": null,
     "overall": null,
     "evidence_span": null
-  }
+  },
+  "guideline_rationale": null
 }""",
     ),
     # ── Example 5: Colorectal — surgical pathology with explicit staging ───────
@@ -210,7 +215,8 @@ FINAL PATHOLOGIC STAGE: pT3 N2a M0 — Stage IIIC Colon Adenocarcinoma
     "M": "M0",
     "overall": "Stage IIIC Colon Adenocarcinoma",
     "evidence_span": "FINAL PATHOLOGIC STAGE: pT3 N2a M0 — Stage IIIC Colon Adenocarcinoma"
-  }
+  },
+  "guideline_rationale": null
 }""",
     ),
 ]

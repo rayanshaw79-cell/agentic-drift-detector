@@ -293,7 +293,20 @@ def retrieve_guidelines(query: str, k: int = 2) -> str:
         return ""
         
     sorted_results = sorted(rrf_scores.values(), key=lambda x: x["score"], reverse=True)
-    top_results = sorted_results[:k]
+    top_results = sorted_results[:fetch_k] # Fetch more for reranking
+    
+    # Rerank with Cross-Encoder
+    try:
+        from clinical.rag.reranker import rerank_results
+        reranked = rerank_results(query, top_results, threshold=0.1)
+        top_results = reranked[:k]
+    except Exception as e:
+        log.warning("[RAG] Reranking skipped/failed: %s", e)
+        top_results = top_results[:k]
+
+    if not top_results:
+        log.warning("[RAG] No guideline chunks passed the relevance threshold.")
+        return ""
     
     formatted: list[str] = []
     for res in top_results:
