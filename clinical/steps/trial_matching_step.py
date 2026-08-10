@@ -225,6 +225,20 @@ def trial_matching_step(state: ClinicalState) -> dict:
                 conf = m.get("match_confidence", 0.0)
                 label = "highly_eligible" if conf >= 0.8 else "eligible" if conf >= 0.6 else "needs_screening"
 
+                # Extract and combine CoT analysis
+                inc_analysis = m.get("inclusion_analysis", "")
+                exc_analysis = m.get("exclusion_analysis", "")
+                evidence = f"Inclusion: {inc_analysis} | Exclusion: {exc_analysis}".strip(" |")
+                
+                # Programmatic guardrail against optimism bias
+                unmet = m.get("unmet_criteria")
+                is_eligible = m.get("eligible", conf >= 0.5)
+                if unmet:
+                    is_eligible = False
+                    if conf >= 0.5:
+                        conf = 0.4  # Mathematically demote hallucinated confidence
+                        label = "needs_screening"
+
                 final_matches.append({
                     "nct_id": nct_id,
                     "brief_title": raw_t.get("brief_title", "Unknown Study"),
@@ -233,11 +247,11 @@ def trial_matching_step(state: ClinicalState) -> dict:
                     "phase": raw_t.get("phase", "Unknown Phase"),
                     "eligibility_score": conf,
                     "eligibility_label": label,
-                    "evidence_span": m.get("evidence", ""),
+                    "evidence_span": evidence,
                     "url": raw_t.get("url", f"https://clinicaltrials.gov/study/{nct_id}"),
-                    "eligible": m.get("eligible", conf >= 0.5),
+                    "eligible": is_eligible,
                     "match_confidence": conf,
-                    "unmet_criteria": m.get("unmet_criteria")
+                    "unmet_criteria": unmet
                 })
 
             confident_matches = [m for m in final_matches if m["match_confidence"] >= 0.5]

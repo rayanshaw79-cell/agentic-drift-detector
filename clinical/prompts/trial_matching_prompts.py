@@ -42,10 +42,11 @@ Schema:
 [
   {
     "nct_id":            "string",
-    "eligible":          true | false,
+    "inclusion_analysis": "Step-by-step verification of inclusion criteria against patient profile.",
+    "exclusion_analysis": "Step-by-step verification of exclusion criteria against patient profile.",
+    "unmet_criteria":    "description of any unmet or exclusion criteria | null",
     "match_confidence":  float (0.0 to 1.0),
-    "evidence":          "reasoning string referencing patient profile fields",
-    "unmet_criteria":    "description of any unmet or exclusion criteria | null"
+    "eligible":          true | false
   }
 ]
 """
@@ -87,17 +88,19 @@ Available Trials:
 [
   {
     "nct_id": "NCT01234567",
-    "eligible": true,
+    "inclusion_analysis": "Patient has Stage IIB completely resected NSCLC, meeting Stage IB-IIIA criteria. Patient has EGFR Mutated status. Minor uncertainty: specific mutation subtype (exon 19 del vs. L858R) not confirmed in profile, but likely eligible.",
+    "exclusion_analysis": "Patient has no prior EGFR TKI therapy documented. No active brain metastases documented.",
+    "unmet_criteria": null,
     "match_confidence": 0.88,
-    "evidence": "Patient has Stage IIB (between IB-IIIA) resected lung adenocarcinoma with EGFR Mutated status per biomarker profile. Trial requires EGFR mutation positive — criteria met. No prior EGFR TKI in profile. Minor uncertainty: specific mutation subtype (exon 19 del vs. L858R) not confirmed in profile.",
-    "unmet_criteria": null
+    "eligible": true
   },
   {
     "nct_id": "NCT09876543",
-    "eligible": false,
+    "inclusion_analysis": "Trial requires Stage IV NSCLC; patient is Stage IIB (criteria unmet). Trial requires PD-L1 TPS >= 50%; patient has PD-L1 <1% (criteria unmet).",
+    "exclusion_analysis": "Trial excludes active EGFR mutation; patient is EGFR mutated (explicitly excluded).",
+    "unmet_criteria": "Stage IV required (patient is IIB). PD-L1 TPS ≥ 50% required (patient <1%). EGFR mutation is an explicit exclusion criterion.",
     "match_confidence": 0.0,
-    "evidence": "Patient has Stage IIB (trial requires Stage IV) and PD-L1 < 1% (trial requires TPS ≥ 50%). Patient also has EGFR mutation which is an active exclusion criterion.",
-    "unmet_criteria": "Stage IV required (patient is IIB). PD-L1 TPS ≥ 50% required (patient <1%). EGFR mutation is an explicit exclusion criterion."
+    "eligible": false
   }
 ]""",
     ),
@@ -130,10 +133,11 @@ Available Trials:
 [
   {
     "nct_id": "NCT11223344",
-    "eligible": false,
+    "inclusion_analysis": "Patient has Stage IV (metastatic) breast cancer, meeting the stage criterion. However, HER2 status is Unknown in the patient profile, whereas trial requires confirmed HER2 IHC 3+ or FISH amplified (criteria unmet). Prior trastuzumab therapy is not documented in the profile (criteria unmet).",
+    "exclusion_analysis": "No active CNS metastases documented.",
+    "unmet_criteria": "HER2 positive status not confirmed (Unknown). Prior trastuzumab not documented in profile.",
     "match_confidence": 0.35,
-    "evidence": "Patient has Stage IV (metastatic) breast cancer meeting the stage criterion. However, HER2 status is Unknown in the patient profile — trial requires confirmed HER2 IHC 3+ or FISH amplified. Additionally, prior trastuzumab therapy is not documented in the profile.",
-    "unmet_criteria": "HER2 positive status not confirmed (Unknown). Prior trastuzumab not documented in profile."
+    "eligible": false
   }
 ]""",
     ),
