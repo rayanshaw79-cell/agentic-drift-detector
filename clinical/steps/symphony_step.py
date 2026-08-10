@@ -52,9 +52,9 @@ def symphony_step(state: ClinicalState) -> dict:
 
     synthesis = synthesize_patient_timeline(visit_history)
 
-    print(
-        f"\n  [SYMPHONY v2 ENGINE] Visits: {synthesis['total_visits']} | "
-        f"RECIST 1.1 Response: {synthesis['recist_overall_response']} ({synthesis['recist_delta_pct']:+.1f}%)"
+    log.info(
+        "[SYMPHONY v2 ENGINE] Visits: %d | RECIST 1.1 Response: %s (%+.1f%%)",
+        synthesis['total_visits'], synthesis['recist_overall_response'], synthesis['recist_delta_pct']
     )
 
     return {

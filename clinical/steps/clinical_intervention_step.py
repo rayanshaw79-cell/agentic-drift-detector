@@ -35,8 +35,7 @@ def clinical_intervention_step(state: ClinicalState) -> dict:
         "retry_count=%d, confidence=%.2f — routing to clinical review queue.",
         record_id, retry_count, conf_display,
     )
-    print(f"\n  [CLINICAL INTERVENTION] Record '{record_id}' sent to human review.")
-    print(f"     Reason: {retry_count} retries with confidence {conf_display:.2f}")
+    log.info("[CLINICAL INTERVENTION] Record '%s' sent to human review. Reason: %d retries with confidence %.2f", record_id, retry_count, conf_display)
 
     original_draft_codes = state.get("icd10_codes") or []
 

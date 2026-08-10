@@ -82,6 +82,20 @@ def get_historical_metrics(
         kwargs["tenant_id"] = tenant_id
     return _backend().get_historical_metrics(limit, **kwargs)
 
+def get_recent_states(
+    limit: int = 2000,
+    *,
+    tenant_id: str | None = None,
+) -> list[dict]:
+    """Retrieve recent raw states for ML retraining."""
+    backend = _backend()
+    kwargs = {}
+    if tenant_id is not None:
+        kwargs["tenant_id"] = tenant_id
+    if hasattr(backend, "get_recent_states"):
+        return backend.get_recent_states(limit, **kwargs)
+    return []
+
 
 def save_human_intervention(
     incident_id: str,

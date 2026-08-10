@@ -1,12 +1,24 @@
 import uuid
 import time
-from fastapi import FastAPI, HTTPException
+import os
+import logging
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
+log = logging.getLogger(__name__)
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(key: str = Depends(api_key_header)):
+    expected_key = os.getenv("API_SECRET_KEY")
+    if expected_key and key != expected_key:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
 from workflows.clinical_coding import clinical_coding_workflow, apply_human_approval
+from telemetry.queue import enqueue
 from telemetry.store import (
-    save_execution_state,
     get_pending_reviews,
     get_review_history,
     save_human_intervention,
@@ -14,15 +26,20 @@ from telemetry.store import (
 )
 from clinical.config.cache import init_semantic_cache
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_semantic_cache()
+    yield
+
 app = FastAPI(
     title="Clinical Coding & SDOH API",
     description="Agentic workflow for clinical extraction, MEAT validation, and SDOH risk prediction.",
-    version="1.0.0"
+    version="1.0.0",
+    dependencies=[Depends(verify_api_key)],
+    lifespan=lifespan
 )
-
-@app.on_event("startup")
-def on_startup():
-    init_semantic_cache()
 
 class ClinicalRequest(BaseModel):
     raw_note: str
@@ -120,9 +137,9 @@ def extract_clinical_data(req: ClinicalRequest):
     
     # Save to telemetry store asynchronously or synchronously
     try:
-        save_execution_state(final_state, analysis=analysis, tenant_id=req.tenant_id)
+        enqueue(final_state, analysis=analysis, tenant_id=req.tenant_id)
     except Exception as e:
-        print(f"Telemetry save failed: {e}")
+        log.error("Telemetry enqueue failed: %s", e)
         
     return ClinicalResponse(
         record_id=final_state["record_id"],
@@ -188,9 +205,9 @@ def assess_preventive_risk(req: PreventiveRequest):
     }
     
     try:
-        save_execution_state(final_state, analysis=analysis, tenant_id=req.tenant_id)
+        enqueue(final_state, analysis=analysis, tenant_id=req.tenant_id)
     except Exception as e:
-        print(f"Telemetry save failed: {e}")
+        log.error("Telemetry enqueue failed: %s", e)
         
     return {
         "patient_id": final_state["patient_id"],

@@ -31,11 +31,9 @@ def raf_audit_step(state: ClinicalState) -> dict:
 
     metrics = calculate_raf_audit_metrics(icd10_codes)
 
-    print(
-        f"\n  [RAF & RADV AUDIT ENGINE] Total RAF: {metrics['total_raf_score']:.3f} | "
-        f"Verified RAF: {metrics['verified_raf_score']:.3f} | "
-        f"RADV Exposure: ${metrics['radv_financial_exposure_usd']:,.2f} | "
-        f"Audit Risk: {metrics['radv_audit_label'].upper()}"
+    log.info(
+        "[RAF & RADV AUDIT ENGINE] Total RAF: %.3f | Verified RAF: %.3f | RADV Exposure: $%,.2f | Audit Risk: %s",
+        metrics['total_raf_score'], metrics['verified_raf_score'], metrics['radv_financial_exposure_usd'], metrics['radv_audit_label'].upper()
     )
 
     return {

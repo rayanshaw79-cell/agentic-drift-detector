@@ -1,0 +1,11 @@
+prior: 0.70
+extractors:
+  gemini:
+    sensitivity: 0.90
+    fpr: 0.15
+  regex:
+    sensitivity: 0.65
+    fpr: 0.02
+  nlm:
+    sensitivity: 0.75
+    fpr: 0.05

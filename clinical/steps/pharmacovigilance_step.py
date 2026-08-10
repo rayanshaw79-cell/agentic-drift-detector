@@ -62,7 +62,7 @@ def pharmacovigilance_step(state: ClinicalState) -> dict:
     # 4. Compute overall Drug Safety Risk
     risk_level = _compute_safety_risk(interactions, adverse_reactions)
 
-    print(f"\n  [PHARMACOVIGILANCE SCANNER] Meds: {len(med_names)} | Interactions: {len(interactions)} | ADR Signals: {len(adverse_reactions)} | Risk: {risk_level.upper()}")
+    log.info("[PHARMACOVIGILANCE SCANNER] Meds: %d | Interactions: %d | ADR Signals: %d | Risk: %s", len(med_names), len(interactions), len(adverse_reactions), risk_level.upper())
 
     return {
         "current_step": "pharmacovigilance",

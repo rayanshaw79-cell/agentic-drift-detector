@@ -25,7 +25,7 @@ def fhir_step(state: ClinicalState) -> dict:
     bundle = export_clinical_state_to_fhir(dict(state))
 
     total_resources = bundle.get("total", 0)
-    print(f"\n  [FHIR R4 ADAPTER] Bundled {total_resources} HL7 FHIR R4 resources for export.")
+    log.info("[FHIR R4 ADAPTER] Bundled %d HL7 FHIR R4 resources for export.", total_resources)
 
     return {
         "current_step": "fhir_export",

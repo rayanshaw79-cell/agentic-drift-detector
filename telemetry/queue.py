@@ -128,8 +128,13 @@ def queue_depth() -> int:
 
 def _sync_write(state: dict, analysis: dict, tenant_id: str) -> None:
     """Write directly to the active store backend (no Redis)."""
+    from drift.drift_detector import analyze_workflow
     from telemetry.store import save_execution_state
-    save_execution_state(state, analysis, tenant_id=tenant_id)
+    
+    workflow_type = analysis.get("workflow_type", "incident_triage")
+    full_analysis = analyze_workflow(state, workflow_type=workflow_type)
+    
+    save_execution_state(state, full_analysis, tenant_id=tenant_id)
 
 
 def _serialise_state(state: dict) -> dict:

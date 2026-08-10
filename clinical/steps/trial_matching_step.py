@@ -252,7 +252,7 @@ def trial_matching_step(state: ClinicalState) -> dict:
 
     # Console print for workflow integration logging
     if confident_matches:
-        print(f"\n  [TRIAL MATCHING ENGINE] Found {len(confident_matches)} active recruiting trials for '{condition_query}'. Top NCT: {confident_matches[0]['nct_id']}")
+        log.info("[TRIAL MATCHING ENGINE] Found %d active recruiting trials for '%s'. Top NCT: %s", len(confident_matches), condition_query, confident_matches[0]['nct_id'])
 
     return {
         "current_step": "trial_matching",

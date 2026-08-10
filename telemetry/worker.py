@@ -80,15 +80,30 @@ def run() -> None:
             continue
 
         try:
+            from drift.drift_detector import analyze_workflow
+            workflow_type = item.get("analysis", {}).get("workflow_type", "incident_triage")
+            full_analysis = analyze_workflow(item["state"], workflow_type=workflow_type)
+
             save_execution_state(
                 item["state"],
-                item["analysis"],
+                full_analysis,
                 tenant_id=item.get("tenant_id", "default"),
             )
             processed += 1
 
             if processed % 100 == 0:
                 log.info("Worker milestone: %d records processed (%d errors).", processed, errors)
+                
+            if processed % 500 == 0:
+                try:
+                    from telemetry.store import get_recent_states
+                    from drift.drift_detector import ml_model
+                    recent_data = get_recent_states(limit=2000)
+                    if recent_data:
+                        ml_model.train(recent_data)
+                        log.info("Worker successfully retrained ML drift model on %d recent events.", len(recent_data))
+                except Exception as e:
+                    log.error("Failed to retrain ML model: %s", e)
 
         except Exception as exc:
             errors += 1

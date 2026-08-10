@@ -35,15 +35,26 @@ log = logging.getLogger(__name__)
 # Regex:   Very high specificity (conservative), misses novel terms → low sensitivity
 # NLM API: Good precision (codebook-grounded), misses abbreviations → moderate sensitivity
 
-_EXTRACTOR_PARAMS = {
-    "gemini": {"sensitivity": 0.90, "fpr": 0.15},
-    "regex":  {"sensitivity": 0.65, "fpr": 0.02},
-    "nlm":    {"sensitivity": 0.75, "fpr": 0.05},
-}
+import os
+import yaml
 
-# Prior: P(a candidate term is a real medical entity)
-# Set moderately high — clinical notes are dense with real conditions
-_PRIOR = 0.70
+_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "config", "bayes_params.yaml")
+
+def _load_params():
+    if os.path.exists(_CONFIG_PATH):
+        try:
+            with open(_CONFIG_PATH, "r") as f:
+                data = yaml.safe_load(f)
+                return data.get("extractors", {}), data.get("prior", 0.70)
+        except Exception as e:
+            log.warning("Failed to load bayes_params.yaml: %s", e)
+    return {
+        "gemini": {"sensitivity": 0.90, "fpr": 0.15},
+        "regex":  {"sensitivity": 0.65, "fpr": 0.02},
+        "nlm":    {"sensitivity": 0.75, "fpr": 0.05},
+    }, 0.70
+
+_EXTRACTOR_PARAMS, _PRIOR = _load_params()
 
 
 def bayesian_posterior(
