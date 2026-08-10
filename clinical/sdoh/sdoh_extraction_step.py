@@ -48,7 +48,11 @@ def _llm_extract_from_note(raw_note: str) -> dict:
         '"exercise_frequency": "none"|"low"|"moderate"|"high"|null, '
         '"food_insecurity_mentioned": true|false|null, '
         '"housing_instability_mentioned": true|false|null, '
-        '"social_isolation_mentioned": true|false|null}'
+        '"social_isolation_mentioned": true|false|null, '
+        '"quotes": {"food_insecurity_mentioned": "exact quote from note"|null, '
+        '"housing_instability_mentioned": "exact quote"|null, '
+        '"social_isolation_mentioned": "exact quote"|null}}\n'
+        "CRITICAL RULE: For any flag you set to true, you MUST provide the exact verbatim sentence from the note in the 'quotes' object."
     )
 
     try:
@@ -124,6 +128,8 @@ def sdoh_extraction_step(state: SdohState) -> dict:
     if raw_note:
         llm_signals = _llm_extract_from_note(raw_note)
         log.info("[SDOH EXTRACTION] LLM signals: %s", llm_signals)
+        
+        quotes = llm_signals.get("quotes", {})
 
         if llm_signals.get("smoking") is not None:
             profile["smoking_flag"] = int(llm_signals["smoking"])
@@ -131,10 +137,18 @@ def sdoh_extraction_step(state: SdohState) -> dict:
             profile["alcohol_flag"] = int(llm_signals["alcohol"])
         if llm_signals.get("exercise_frequency"):
             profile["exercise_score"] = _exercise_score_from_freq(llm_signals["exercise_frequency"])
+            
         for flag in ("food_insecurity_mentioned", "housing_instability_mentioned", "social_isolation_mentioned"):
             if llm_signals.get(flag) is not None:
-                profile[flag] = bool(llm_signals[flag])
-                if flag == "food_insecurity_mentioned" and llm_signals[flag]:
+                val = bool(llm_signals[flag])
+                if val:
+                    quote = quotes.get(flag)
+                    if not quote or quote not in raw_note:
+                        log.warning("[SDOH PROVENANCE FAILURE] Flag '%s' raised but quote '%s' not in note. Rejecting.", flag, quote)
+                        val = False
+                
+                profile[flag] = val
+                if flag == "food_insecurity_mentioned" and val:
                     profile["food_risk_score"] = max(profile["food_risk_score"], 0.6)
 
     latency = int((time.perf_counter() - start) * 1000) + 5

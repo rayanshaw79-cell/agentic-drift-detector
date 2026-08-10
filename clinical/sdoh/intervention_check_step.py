@@ -50,13 +50,14 @@ def intervention_check_step(state: SdohState) -> dict:
         )
     elif len(trajectory) >= 3:
         # Check if the last two consecutive deltas are both positive (sustained upward trend)
+        # AND the total increase is clinically significant (e.g., > 0.05)
         d1 = trajectory[-2] - trajectory[-3]
         d2 = trajectory[-1] - trajectory[-2]
-        if d1 > 0 and d2 > 0:
+        if d1 > 0 and d2 > 0 and (d1 + d2) > 0.05:
             intervention_flag   = True
             intervention_reason = (
                 f"Sustained risk escalation over the last 3 visits "
-                f"(+{d1:.2f}, +{d2:.2f}). Risk trajectory is trending upward."
+                f"(+{d1:.2f}, +{d2:.2f}, total: +{(d1+d2):.2f}). Risk trajectory is trending upward."
             )
 
     if intervention_flag:

@@ -59,10 +59,9 @@ def risk_trajectory_step(state: SdohState) -> dict:
     # Score every historical visit to build the trajectory
     trajectory: list[float] = []
     for visit in visit_history:
-        label, proba, _ = predict_proba(bundle, visit)
-        # Map label to a normalised 0-1 risk score for charting
-        label_to_score = {"low": 0.15, "moderate": 0.40, "high": 0.70, "critical": 0.95}
-        trajectory.append(label_to_score.get(label, proba))
+        _, proba, _ = predict_proba(bundle, visit)
+        # Append actual continuous probability to avoid quantization errors (artificial spikes)
+        trajectory.append(float(proba))
 
     # Score the current (latest) visit with full SHAP explanation
     current_visit = {**visit_history[-1], **sdoh_profile}
