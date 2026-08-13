@@ -194,8 +194,31 @@ def classify_risk(score):
         return "high_risk"
 
 # -------------------------
-# 4. PUBLIC ENTRY POINT
-# -------------------------
+# ── Complexity Class Derivation ──────────────────────────────────────────────
+
+def _derive_complexity_class(state: dict, workflow_type: str) -> str:
+    """Classify an execution into one of four complexity tiers.
+
+    This mirrors the logic in sqlite_store._derive_complexity_class but lives
+    here so the detector can pass the class to get_historical_metrics *before*
+    saving, ensuring the baseline used during analysis is already segmented.
+
+    Classes:
+        simple               — incident_triage
+        moderate             — clinical_coding, no biomarkers
+        high_complexity      — clinical_coding with ≥1 biomarker
+        preventive_screening — preventive_screening workflow
+    """
+    if workflow_type == "preventive_screening":
+        return "preventive_screening"
+    if workflow_type == "clinical_coding":
+        if state.get("biomarkers"):  # non-empty list
+            return "high_complexity"
+        return "moderate"
+    return "simple"
+
+
+# ── Public Entry Point ────────────────────────────────────────────────────────
 
 def analyze_workflow(state, workflow_type: str = "incident_triage"):
     """
@@ -203,17 +226,20 @@ def analyze_workflow(state, workflow_type: str = "incident_triage"):
 
     Args:
         state:         The final LangGraph state dict.
-        workflow_type: "incident_triage" (default) or "clinical_coding".
+        workflow_type: "incident_triage" (default), "clinical_coding",
+                       or "preventive_screening".
                        Controls which semantic drift signals are applied.
     """
-    baseline = get_historical_metrics()
+    complexity_class = _derive_complexity_class(state, workflow_type)
+    baseline = get_historical_metrics(complexity_class=complexity_class)
     score, ml_explanation = calculate_drift_score(state, baseline, workflow_type=workflow_type)
     risk = classify_risk(score)
 
     return {
-        "drift_score":    score,
-        "risk_level":     risk,
-        "workflow_type":  workflow_type,
-        "baseline_used":  baseline,
-        "ml_explanation": ml_explanation,
+        "drift_score":      score,
+        "risk_level":       risk,
+        "workflow_type":    workflow_type,
+        "complexity_class": complexity_class,
+        "baseline_used":   baseline,
+        "ml_explanation":  ml_explanation,
     }

@@ -70,6 +70,7 @@ _MIGRATIONS = [
     ("patient_id",           "TEXT DEFAULT NULL"),
     ("lifestyle_risk_score", "REAL DEFAULT 0.0"),
     ("lifestyle_factors",    "TEXT DEFAULT '[]'"),
+    ("complexity_class",     "TEXT DEFAULT 'simple'"),
 ]
 
 _INSERT = """
@@ -79,10 +80,11 @@ _INSERT = """
         drift_score, risk_level, workflow_type, overall_confidence,
         unresolved_count, total_entities, ml_explanation, privacy_leak_risk,
         sdoh_risk_label, sdoh_risk_score, sdoh_shap_factors,
-        patient_id, lifestyle_risk_score, lifestyle_factors
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        patient_id, lifestyle_risk_score, lifestyle_factors, complexity_class
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
+# Unfiltered baseline — used when no complexity_class is specified (global view).
 _BASELINE_QUERY = """
     SELECT
         AVG(step_count)  AS avg_steps,
@@ -105,17 +107,81 @@ _BASELINE_QUERY = """
     )
 """
 
-_DEFAULT_BASELINE = {
-    "avg_steps":                   4.0,
-    "avg_retries":                 0.0,
-    "avg_latency":                 100.0,
-    "escalation_rate":             0.2,
-    "high_severity_rate":          0.2,
-    "low_severity_escalation_rate": 0.05,
-    "avg_coding_confidence":       0.75,
-    "avg_unresolved_rate":         0.05,
-    "avg_privacy_leak_risk":       0.0,
+# Segmented baseline — filters by complexity_class before aggregating.
+_BASELINE_QUERY_SEGMENTED = """
+    SELECT
+        AVG(step_count)  AS avg_steps,
+        AVG(retry_count) AS avg_retries,
+        AVG(execution_time_ms) AS avg_latency,
+        AVG(CASE WHEN decision = 'escalate' THEN 1.0 ELSE 0.0 END) AS escalation_rate,
+        AVG(CASE WHEN severity = 'high'     THEN 1.0 ELSE 0.0 END) AS high_severity_rate,
+        AVG(CASE WHEN severity = 'low'
+                 THEN CASE WHEN decision = 'escalate' THEN 1.0 ELSE 0.0 END
+                 ELSE NULL END) AS low_severity_escalation_rate,
+        AVG(overall_confidence) AS avg_coding_confidence,
+        SUM(unresolved_count)*1.0 / NULLIF(SUM(total_entities), 0) AS avg_unresolved_rate,
+        AVG(privacy_leak_risk) AS avg_privacy_leak_risk
+    FROM (
+        SELECT step_count, retry_count, execution_time_ms, decision, severity,
+               overall_confidence, unresolved_count, total_entities, privacy_leak_risk
+        FROM executions
+        WHERE complexity_class = ?
+        ORDER BY id DESC
+        LIMIT ?
+    )
+"""
+
+# Per-class default baselines reflect the realistic operating envelope of each tier.
+# High-complexity cases legitimately have more steps, retries, and latency.
+_DEFAULT_BASELINE_BY_CLASS: dict[str, dict] = {
+    "simple": {
+        "avg_steps":                    4.0,
+        "avg_retries":                  0.0,
+        "avg_latency":                  100.0,
+        "escalation_rate":              0.2,
+        "high_severity_rate":           0.2,
+        "low_severity_escalation_rate": 0.05,
+        "avg_coding_confidence":        0.75,
+        "avg_unresolved_rate":          0.05,
+        "avg_privacy_leak_risk":        0.0,
+    },
+    "moderate": {
+        "avg_steps":                    6.0,
+        "avg_retries":                  0.5,
+        "avg_latency":                  300.0,
+        "escalation_rate":              0.15,
+        "high_severity_rate":           0.25,
+        "low_severity_escalation_rate": 0.05,
+        "avg_coding_confidence":        0.72,
+        "avg_unresolved_rate":          0.08,
+        "avg_privacy_leak_risk":        0.0,
+    },
+    "high_complexity": {
+        "avg_steps":                    9.0,
+        "avg_retries":                  1.0,
+        "avg_latency":                  600.0,
+        "escalation_rate":              0.1,
+        "high_severity_rate":           0.4,
+        "low_severity_escalation_rate": 0.05,
+        "avg_coding_confidence":        0.68,
+        "avg_unresolved_rate":          0.12,
+        "avg_privacy_leak_risk":        0.0,
+    },
+    "preventive_screening": {
+        "avg_steps":                    5.0,
+        "avg_retries":                  0.2,
+        "avg_latency":                  200.0,
+        "escalation_rate":              0.3,
+        "high_severity_rate":           0.3,
+        "low_severity_escalation_rate": 0.1,
+        "avg_coding_confidence":        0.70,
+        "avg_unresolved_rate":          0.10,
+        "avg_privacy_leak_risk":        0.0,
+    },
 }
+
+# Backwards-compatible global default (used when complexity_class is None)
+_DEFAULT_BASELINE = _DEFAULT_BASELINE_BY_CLASS["simple"]
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -134,6 +200,26 @@ def init_db() -> None:
     log.debug("SQLite database initialised at %s", DB_PATH)
 
 
+def _derive_complexity_class(state: dict, analysis: dict | None) -> str:
+    """Derive a complexity_class tag from the execution state.
+
+    Classes:
+        simple               — incident_triage runs
+        moderate             — clinical_coding with no biomarkers
+        high_complexity      — clinical_coding with biomarkers present
+        preventive_screening — preventive_screening workflow
+    """
+    workflow = (analysis or {}).get("workflow_type") or state.get("workflow_type", "incident_triage")
+    if workflow == "preventive_screening":
+        return "preventive_screening"
+    if workflow == "clinical_coding":
+        biomarkers = state.get("biomarkers")
+        if biomarkers:  # non-empty list → high complexity
+            return "high_complexity"
+        return "moderate"
+    return "simple"
+
+
 def save_execution_state(
     state,
     analysis: dict | None = None,
@@ -146,6 +232,7 @@ def save_execution_state(
     icd10_codes = state.get("icd10_codes", [])
     unresolved_count = sum(1 for c in icd10_codes if c.get("code") == "UNRESOLVED") if icd10_codes else 0
     total_entities = len(icd10_codes) if icd10_codes else 0
+    complexity_class = _derive_complexity_class(state, analysis)
 
     values = (
         record_key,
@@ -169,7 +256,8 @@ def save_execution_state(
         json.dumps(state.get("sdoh_shap_factors", [])),
         state.get("patient_id"),
         state.get("lifestyle_risk_score", 0.0),
-        json.dumps(state.get("lifestyle_factors", []))
+        json.dumps(state.get("lifestyle_factors", [])),
+        complexity_class,
     )
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(_INSERT, values)
@@ -181,25 +269,41 @@ def get_historical_metrics(
     limit: int = 100,
     *,
     tenant_id: str | None = None,  # ignored in SQLite mode
+    complexity_class: str | None = None,
 ) -> dict:
-    """Return population-level baseline metrics from the last *limit* executions."""
+    """Return population-level baseline metrics from the last *limit* executions.
+
+    If complexity_class is provided, the query is scoped to that class only,
+    ensuring like-for-like baseline comparisons (e.g., high_complexity cases
+    are never compared against a baseline diluted by simple triage runs).
+    """
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
-        row = conn.execute(_BASELINE_QUERY, (limit,)).fetchone()
+        if complexity_class:
+            row = conn.execute(_BASELINE_QUERY_SEGMENTED, (complexity_class, limit)).fetchone()
+        else:
+            row = conn.execute(_BASELINE_QUERY, (limit,)).fetchone()
+
+    default = dict(
+        _DEFAULT_BASELINE_BY_CLASS.get(complexity_class or "simple", _DEFAULT_BASELINE)
+    )
 
     if not row or row["avg_steps"] is None:
-        log.debug("SQLite: empty database — using default baseline.")
-        return dict(_DEFAULT_BASELINE)
+        log.debug(
+            "SQLite: empty database for class=%s — using default baseline.",
+            complexity_class or "global",
+        )
+        return default
 
     return {
         "avg_steps":                    row["avg_steps"],
         "avg_retries":                  row["avg_retries"],
         "avg_latency":                  row["avg_latency"],
-        "escalation_rate":              row["escalation_rate"]              or 0.2,
-        "high_severity_rate":           row["high_severity_rate"]           or 0.2,
-        "low_severity_escalation_rate": row["low_severity_escalation_rate"] or 0.05,
-        "avg_coding_confidence":        row["avg_coding_confidence"]        or 0.75,
-        "avg_unresolved_rate":          row["avg_unresolved_rate"]          or 0.05,
+        "escalation_rate":              row["escalation_rate"]              or default["escalation_rate"],
+        "high_severity_rate":           row["high_severity_rate"]           or default["high_severity_rate"],
+        "low_severity_escalation_rate": row["low_severity_escalation_rate"] or default["low_severity_escalation_rate"],
+        "avg_coding_confidence":        row["avg_coding_confidence"]        or default["avg_coding_confidence"],
+        "avg_unresolved_rate":          row["avg_unresolved_rate"]          or default["avg_unresolved_rate"],
         "avg_privacy_leak_risk":        row["avg_privacy_leak_risk"]        or 0.0,
     }
 
@@ -297,3 +401,31 @@ def get_review_history(limit: int = 50) -> list[dict]:
             result.append(d)
         return result
 
+
+def get_breaker_events(limit: int = 100) -> list[dict]:
+    """Retrieve all circuit breaker trigger events from the audit log.
+
+    These are written by intervention_step every time the LangGraph circuit
+    breaker fires. Intended for the clinical auditor dashboard view.
+    """
+    init_db()
+    query = """
+        SELECT id, incident_id, reviewed_by, notes, created_at
+        FROM human_interventions
+        WHERE action = 'circuit_breaker_triggered'
+        ORDER BY id DESC
+        LIMIT ?
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(query, (limit,)).fetchall()
+
+    result = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["trigger_details"] = json.loads(d["notes"]) if d["notes"] else {}
+        except Exception:
+            d["trigger_details"] = {}
+        result.append(d)
+    return result

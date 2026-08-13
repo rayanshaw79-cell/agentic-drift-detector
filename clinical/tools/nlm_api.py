@@ -114,3 +114,70 @@ def lookup_rxnorm(drug_name: str, max_results: int = 3) -> list[dict]:
             if len(results) >= max_results:
                 return results
     return results
+
+
+# ── Offline Fallback Mappings (SNOMED & LOINC) ──────────────────────────────
+
+# In an enterprise setting, SNOMED and LOINC lookups require an authenticated UMLS API key.
+# For high-frequency, low-latency BPO mapping, local fallback dictionaries are commonly
+# used to catch known "data mismatches" (e.g. vitals parsed as conditions).
+
+_FALLBACK_SNOMED = {
+    "malignant neoplastic disease": {"code": "363346000", "description": "Malignant neoplastic disease (disorder)"},
+    "cancer": {"code": "363346000", "description": "Malignant neoplastic disease (disorder)"},
+    "chronic pain": {"code": "82423001", "description": "Chronic pain (finding)"},
+    "fever": {"code": "386661006", "description": "Fever (finding)"},
+    "headache": {"code": "25064002", "description": "Headache (finding)"},
+    "fatigue": {"code": "84229001", "description": "Fatigue (finding)"},
+    "nausea": {"code": "422587007", "description": "Nausea (finding)"},
+}
+
+_FALLBACK_LOINC = {
+    "systolic blood pressure": {"code": "8480-6", "description": "Systolic blood pressure"},
+    "blood pressure": {"code": "85354-9", "description": "Blood pressure panel with all children optional"},
+    "diastolic blood pressure": {"code": "8462-4", "description": "Diastolic blood pressure"},
+    "fasting glucose": {"code": "14771-0", "description": "Fasting glucose [Mass/volume] in Serum or Plasma"},
+    "heart rate": {"code": "8867-4", "description": "Heart rate"},
+    "weight": {"code": "29463-7", "description": "Body weight"},
+    "temperature": {"code": "8310-5", "description": "Body temperature"},
+}
+
+def lookup_snomed(term: str, max_results: int = 1) -> list[dict]:
+    """
+    Offline fallback lookup for SNOMED-CT terms.
+    """
+    if not term:
+        return []
+    
+    clean_term = term.strip().lower()
+    
+    # Exact or substring match in our fallback dictionary
+    for key, data in _FALLBACK_SNOMED.items():
+        if key in clean_term or clean_term in key:
+            return [{
+                "term": term,
+                "code": data["code"],
+                "description": data["description"],
+                "system": "SNOMED"
+            }]
+    return []
+
+def lookup_loinc(term: str, max_results: int = 1) -> list[dict]:
+    """
+    Offline fallback lookup for LOINC terms (labs and vitals).
+    """
+    if not term:
+        return []
+    
+    clean_term = term.strip().lower()
+    
+    for key, data in _FALLBACK_LOINC.items():
+        if key in clean_term or clean_term in key:
+            return [{
+                "term": term,
+                "code": data["code"],
+                "description": data["description"],
+                "system": "LOINC"
+            }]
+    return []
+

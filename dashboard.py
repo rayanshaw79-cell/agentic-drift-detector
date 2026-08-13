@@ -224,6 +224,28 @@ with st.sidebar:
     IS_CLINICAL = workflow_mode == "Clinical Coding"
     IS_PREVENTIVE = workflow_mode == "Preventive Screening"
 
+    # ── Baseline Complexity View ───────────────────────────────────────────────
+    st.markdown("### 🎯 Baseline View")
+    _CLASS_OPTIONS = {
+        "🌐 Global (All Cases)":        None,
+        "⚡ Simple (Incident Triage)":  "simple",
+        "🔬 Moderate (Clinical NLP)":   "moderate",
+        "🧬 High Complexity (Oncology)": "high_complexity",
+        "🛡️ Preventive Screening":      "preventive_screening",
+    }
+    selected_baseline_label = st.selectbox(
+        "Baseline Complexity Class",
+        options=list(_CLASS_OPTIONS.keys()),
+        index=0,
+        label_visibility="collapsed",
+        help=(
+            "Segment the drift baseline by case complexity. "
+            "Prevents busy high-complexity weeks from triggering false positives "
+            "on simple incident-triage runs (per Waldemar Szemat's architecture critique)."
+        ),
+    )
+    SELECTED_COMPLEXITY_CLASS: str | None = _CLASS_OPTIONS[selected_baseline_label]
+
     # ── Tenant selector (PostgreSQL mode only) ────────────────────────────────
     if USE_POSTGRES:
         st.markdown("### 🏢 Tenant")
@@ -1371,6 +1393,134 @@ if IS_CLINICAL:
         except Exception as exc:
             st.error(f"Error exporting FHIR Bundle: {exc}")
 
+# ── 🛡️ Circuit Breaker Audit Log ─────────────────────────────────────────────
+# Only shown in Incident Triage mode; irrelevant for clinical coding.
+if not IS_CLINICAL and not IS_PREVENTIVE:
+    st.markdown("---")
+    st.markdown(
+        "<div class='section-title'>🛡️ Circuit Breaker Audit Log</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Every time the deterministic circuit breaker fires inside `intervention_step`, "
+        "a structured record is saved here. Clinical compliance officers can query, export, "
+        "and audit every breaker event — resolving the *opaque control* critique."
+    )
+
+    try:
+        from telemetry.store import get_breaker_events
+        breaker_events = get_breaker_events(limit=100)
+
+        if breaker_events:
+            # Flatten trigger_details into individual columns for readability
+            rows = []
+            for ev in breaker_events:
+                td = ev.get("trigger_details", {})
+                rows.append({
+                    "Timestamp":        ev.get("created_at", "—"),
+                    "Incident ID":      ev.get("incident_id", "—"),
+                    "Retries at Trigger": td.get("retry_count_at_trigger", "—"),
+                    "Confidence at Trigger": td.get("confidence_at_trigger", "—"),
+                    "Trigger Reason":   td.get("trigger_reason", "—"),
+                    "Action Taken":     td.get("action_taken", "deterministic_escalation"),
+                    "Path at Trigger":  " → ".join(td.get("path_at_trigger", [])),
+                })
+            breaker_df = pd.DataFrame(rows)
+
+            col_b1, col_b2, col_b3 = st.columns(3)
+            col_b1.metric("Total Breaker Events", len(breaker_events))
+            avg_retries_at_trigger = breaker_df["Retries at Trigger"].apply(
+                lambda x: float(x) if x != "—" else 0
+            ).mean()
+            col_b2.metric("Avg Retries at Trigger", f"{avg_retries_at_trigger:.1f}")
+            avg_conf_at_trigger = breaker_df["Confidence at Trigger"].apply(
+                lambda x: float(x) if x != "—" else 0
+            ).mean()
+            col_b3.metric("Avg Confidence at Trigger", f"{avg_conf_at_trigger:.3f}")
+
+            st.dataframe(
+                breaker_df,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            csv_breaker = breaker_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Export Breaker Log (CSV)",
+                data=csv_breaker,
+                file_name="circuit_breaker_audit_log.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        else:
+            st.success(
+                "✅ No circuit breaker events on record. "
+                "The system has not triggered a forced escalation."
+            )
+    except Exception as exc:
+        st.error(f"Error loading Circuit Breaker Audit Log: {exc}")
+
+# ── 📐 Golden Dataset Regression Trend ───────────────────────────────────────
+if not IS_CLINICAL and not IS_PREVENTIVE:
+    st.markdown("---")
+    st.markdown(
+        "<div class='section-title'>📐 Golden Dataset Regression Trend</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Drift scores from fixed, immutable test inputs run via "
+        "`python scripts/run_golden_dataset.py`. Because inputs never change, "
+        "any upward trend here is 100% attributable to LLM / API degradation — "
+        "not case-mix shifts. This prevents slow drift absorption into the rolling baseline."
+    )
+
+    try:
+        golden_df = df_raw.copy() if not df_raw.empty else pd.DataFrame()
+
+        # Re-query raw rows filtered to golden_regression workflow type
+        from telemetry.store import get_recent_states
+        all_states = get_recent_states(limit=500)
+        golden_rows = [
+            s for s in all_states
+            if s.get("workflow_type") == "golden_regression"
+        ] if all_states else []
+
+        if golden_rows:
+            gdf = pd.DataFrame(golden_rows)
+            gdf["created_at"] = pd.to_datetime(gdf.get("created_at", pd.Series(dtype="str")), errors="coerce")
+            gdf = gdf.sort_values("created_at")
+
+            import plotly.express as px
+            fig_golden = px.line(
+                gdf,
+                x="created_at",
+                y="drift_score",
+                color="incident_id",
+                markers=True,
+                title="Golden Dataset: Drift Score Over Time (per Fixed Case)",
+                labels={"created_at": "Run Timestamp", "drift_score": "Drift Score", "incident_id": "Golden Case"},
+                template="plotly_dark",
+            )
+            fig_golden.update_layout(
+                plot_bgcolor="#0d1117",
+                paper_bgcolor="#0d1117",
+                font_color="#e6edf3",
+                legend_title_text="Golden Case",
+            )
+            st.plotly_chart(fig_golden, use_container_width=True)
+            st.caption(
+                f"Showing {len(gdf)} golden regression runs. "
+                "Run `python scripts/run_golden_dataset.py` to add the latest data point."
+            )
+        else:
+            st.info(
+                "📭 No golden regression runs recorded yet.\n\n"
+                "Run `python scripts/run_golden_dataset.py` from the project root "
+                "to execute the first regression sweep and populate this chart."
+            )
+    except Exception as exc:
+        st.error(f"Error loading Golden Dataset chart: {exc}")
+
 # ── Footer ────────────────────────────────────────────────────────────────────
 backend_label = "PostgreSQL + TimescaleDB" if USE_POSTGRES else "SQLite"
 st.markdown(
@@ -1378,6 +1528,7 @@ st.markdown(
     f"Built with LangGraph &amp; Streamlit &nbsp;·&nbsp; {backend_label}</div>",
     unsafe_allow_html=True,
 )
+
 
 
 

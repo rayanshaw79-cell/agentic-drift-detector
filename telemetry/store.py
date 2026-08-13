@@ -70,16 +70,23 @@ def get_historical_metrics(
     limit: int = 100,
     *,
     tenant_id: str | None = None,
+    complexity_class: str | None = None,
 ) -> dict:
     """
     Return population-level baseline metrics.
 
     In PostgreSQL mode the query is scoped to tenant_id (defaults to
     TENANT_ID env var). In SQLite mode tenant_id is ignored.
+
+    If complexity_class is provided ('simple', 'moderate', 'high_complexity',
+    'preventive_screening'), the baseline is scoped to that class only,
+    preventing case-mix shifts from masking real drift.
     """
     kwargs = {}
     if tenant_id is not None:
         kwargs["tenant_id"] = tenant_id
+    if complexity_class is not None:
+        kwargs["complexity_class"] = complexity_class
     return _backend().get_historical_metrics(limit, **kwargs)
 
 def get_recent_states(
@@ -155,3 +162,14 @@ def get_review_history(limit: int = 50) -> list[dict]:
         return backend.get_review_history(limit=limit)
     return []
 
+
+def get_breaker_events(limit: int = 100) -> list[dict]:
+    """Retrieve all circuit breaker trigger events from the audit log.
+
+    Returns structured records written by intervention_step each time the
+    LangGraph circuit breaker fires. Used by the dashboard audit log view.
+    """
+    backend = _backend()
+    if hasattr(backend, "get_breaker_events"):
+        return backend.get_breaker_events(limit=limit)
+    return []
